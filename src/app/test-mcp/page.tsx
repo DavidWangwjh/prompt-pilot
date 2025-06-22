@@ -1,134 +1,152 @@
 'use client';
 
 import { useState } from 'react';
-import { Bot, ChevronDown, ChevronUp, Loader2, Workflow, Send } from 'lucide-react';
+import { Bot, ChevronDown, ChevronUp, Loader2, Workflow, Send, Database, AlertTriangle } from 'lucide-react';
 
-const McpResultDisplay = ({ result }: { result: any }) => {
-    if (!result || !result.result) {
-        return null;
-    }
+// --- Types ---
+interface Prompt {
+  id: number;
+  title: string;
+  content: string;
+  order: number;
+}
 
-    const { type, workflow, prompts, message } = result.result;
+interface ExecutionPlan {
+  task: string;
+  analysis: {
+    primaryType: string;
+    keywords: string[];
+  };
+  prompts: Prompt[];
+}
 
-    if (type === 'no_workflow_found') {
-        return (
-            <div className="text-center text-gray-500 py-4">
-                <p>{message}</p>
-            </div>
-        );
-    }
-    
-    if (type === 'prompt_chain' && workflow && prompts) {
-        return (
-            <div className="space-y-4">
-                <div className="p-4 bg-white rounded-lg border border-gray-200 shadow-sm">
-                    <h3 className="font-bold text-lg text-gray-900">{workflow.name}</h3>
-                    <p className="text-sm text-gray-600 mt-1">{workflow.description}</p>
-                </div>
-                <div className="space-y-3">
-                    {prompts.map((prompt: any, index: number) => (
-                        <div key={prompt.id} className="bg-white border border-gray-200 rounded-lg p-4 relative">
-                            <span className="absolute top-2 left-2 bg-blue-600 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center">{index + 1}</span>
-                            <div className="ml-8">
-                                <h4 className="font-semibold text-gray-800">{prompt.title}</h4>
-                                <p className="text-sm text-gray-500 mt-2 font-mono bg-gray-50 p-2 rounded">{prompt.content}</p>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        );
-    }
-    
-    return <p className="text-gray-500">The result format is not recognized.</p>;
+// --- Components ---
+const ExecutionPlanDisplay = ({ plan }: { plan: ExecutionPlan }) => {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-gray-800">Execution Plan for: <span className="text-blue-600">{plan.task}</span></h2>
+        <p className="text-sm text-gray-500">Task Type: <span className="font-medium capitalize">{plan.analysis.primaryType}</span>, Keywords: <span className="font-medium">{plan.analysis.keywords.join(', ')}</span></p>
+      </div>
+
+      <div className="space-y-4">
+        <h3 className="text-lg font-semibold text-gray-700 flex items-center gap-2">
+            <Database className="h-5 w-5 text-purple-600" />
+            Prompts Retrieved from Vault
+        </h3>
+        {plan.prompts.map((prompt) => (
+          <div key={prompt.id} className="bg-white border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center gap-3 mb-2">
+                  <span className="bg-purple-600 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center">{prompt.order}</span>
+                  <h4 className="font-semibold text-gray-800">{prompt.title}</h4>
+              </div>
+              <p className="text-sm text-gray-600 font-mono bg-gray-50 p-3 rounded-md whitespace-pre-wrap">{prompt.content}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 };
 
-
+// --- Main Page ---
 export default function McpTestPage() {
-  const [query, setQuery] = useState('');
-  const [result, setResult] = useState<any>(null);
+  const [task, setTask] = useState('research AI safety');
+  const [executionPlan, setExecutionPlan] = useState<ExecutionPlan | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showRaw, setShowRaw] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const runTest = async (currentQuery: string) => {
+  const executeTask = async (taskQuery: string) => {
     setLoading(true);
-    setResult(null);
-    setQuery(currentQuery);
+    setError(null);
+    setExecutionPlan(null);
 
     try {
       const body = {
-        jsonrpc: '2.0', id: 1, method: 'tools/call',
-        params: { name: 'run_prompt_workflow', arguments: { task: currentQuery } }
+        jsonrpc: '2.0',
+        id: Date.now(), // Use a unique ID for each request
+        method: 'tools/call',
+        params: {
+          name: 'run_prompt_workflow',
+          arguments: { task: taskQuery }
+        }
       };
       
       const response = await fetch('/api/mcp-link', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
       });
 
       const data = await response.json();
-      setResult(data);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'An unknown error occurred.';
-      setResult({ error: message });
+      
+      if (data.error) {
+        throw new Error(data.error.message || 'An unknown API error occurred');
+      }
+
+      setExecutionPlan(data.result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'An unknown error occurred.';
+      console.error("MCP Execution Error:", message);
+      setError(message);
     } finally {
       setLoading(false);
     }
-  }
-
-  const testExamples = [
-    { name: 'Deep Research Task', query: 'deep research on AI safety and make a summary' },
-    { name: 'Creative Writing', query: 'write a creative story about space exploration' },
-  ];
+  };
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="text-center mb-6">
+    <div className="container mx-auto p-4 sm:p-6 md:p-8 max-w-4xl">
+      <div className="text-center mb-8">
         <Workflow className="mx-auto h-12 w-12 text-blue-600" />
-        <h1 className="text-3xl font-bold mt-2">MCP Workflow Engine</h1>
-        <p className="text-gray-500 mt-1">Enter a high-level task and see the prompt chain MCP prepares for execution.</p>
+        <h1 className="text-3xl font-bold mt-2 text-gray-900">MCP Vault Retrieval Test</h1>
+        <p className="text-gray-600 mt-1">Verify that the MCP can correctly analyze a task and retrieve prompts from your vault.</p>
       </div>
 
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold mb-3">Quick Test Examples:</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {testExamples.map((example, index) => (
-            <button key={index} onClick={() => runTest(example.query)} disabled={loading} className="p-3 text-left border border-gray-300 rounded-lg hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed transition-all">
-              <div className="font-medium text-sm">{example.name}</div>
-            </button>
-          ))}
+      <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+        <div className="flex flex-col sm:flex-row gap-4">
+          <input
+            type="text"
+            value={task}
+            onChange={(e) => setTask(e.target.value)}
+            placeholder="Enter a task (e.g., 'research AI safety')"
+            className="border border-gray-300 rounded-md p-3 flex-grow focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            onClick={() => executeTask(task)}
+            disabled={loading || !task.trim()}
+            className="bg-blue-600 text-white px-6 py-3 rounded-md disabled:bg-gray-400 hover:bg-blue-700 transition-all inline-flex items-center justify-center gap-2 font-medium"
+          >
+            {loading ? <Loader2 className="animate-spin" size={20} /> : <Send size={16} />}
+            {loading ? 'Retrieving...' : 'Run Task'}
+          </button>
         </div>
       </div>
+      
+      <div className="mt-8">
+        {loading && (
+          <div className="flex items-center justify-center gap-3 text-gray-600 py-12">
+            <Loader2 className="animate-spin" size={24} />
+            <span className="text-lg">Analyzing task and retrieving prompts from your vault...</span>
+          </div>
+        )}
 
-      <form onSubmit={(e) => { e.preventDefault(); runTest(query); }} className="flex gap-2 mb-4">
-        <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Enter your task..." className="border rounded-md p-2 flex-grow"/>
-        <button type="submit" disabled={loading} className="bg-blue-600 text-white px-4 py-2 rounded-md disabled:bg-gray-400 hover:bg-blue-700 transition-all inline-flex items-center gap-2">
-          {loading ? <><Loader2 className="animate-spin" size={20}/> Building...</> : <><Send size={16}/>Run Workflow</>}
-        </button>
-      </form>
-
-      <div className="mt-6">
-        <h2 className="text-xl font-semibold mb-2">Execution Plan:</h2>
-        {loading && <div className="flex items-center gap-2 text-gray-500"><Loader2 className="animate-spin" size={20} /><span>Finding best workflow...</span></div>}
-        {result && !loading && (
-          <div className="border rounded-lg bg-gray-50/50 p-4">
-            <McpResultDisplay result={result} />
-
-            <div className="mt-4 border-t pt-4">
-                <button onClick={() => setShowRaw(!showRaw)} className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900">
-                    {showRaw ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                    <span>{showRaw ? 'Hide' : 'Show'} Raw JSON Response</span>
-                </button>
-                {showRaw && (
-                     <pre className="bg-gray-900 text-white p-4 rounded-md border overflow-auto text-xs mt-2">
-                        <code>{JSON.stringify(result, null, 2)}</code>
-                    </pre>
-                )}
+        {error && (
+          <div className="bg-red-50 border-l-4 border-red-400 text-red-700 p-4 rounded-md" role="alert">
+            <div className="flex items-center">
+                <AlertTriangle className="h-6 w-6 mr-3"/>
+                <div>
+                    <p className="font-bold">Error Retrieving Prompts</p>
+                    <p>{error}</p>
+                </div>
             </div>
+          </div>
+        )}
+
+        {executionPlan && (
+          <div className="bg-gray-50/50 rounded-lg p-6 border border-gray-200">
+            <ExecutionPlanDisplay plan={executionPlan} />
           </div>
         )}
       </div>
     </div>
   );
-}
+} 

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "promptpilot": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-nextjs", "http://localhost:3000/api/mcp-link"],
+      "env": {}
+    }
+  }
+} 
