@@ -1,220 +1,129 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { workflows } from '@/lib/workflows';
 import Fuse from 'fuse.js';
 
-// Define the prompt type for search
-interface SearchPrompt {
-  id: string;
-  title: string;
-  description: string;
-  content: string;
-  tags: string[];
-  likes: number;
-  model: string;
-}
+// Initialize Fuse.js for fuzzy searching workflows
+const workflowFuse = new Fuse(workflows, {
+  keys: ['name', 'description', 'category'],
+  includeScore: true,
+  threshold: 0.4,
+});
 
-// Initialize Fuse instance for prompt search
-let promptFuse: Fuse<SearchPrompt> | null = null;
+const FAKE_USER_ID = 'f9df1fa1-1a38-494c-917e-ca3a3b80b75d';
 
-// Function to initialize prompt search
-async function initializePromptSearch() {
-  if (promptFuse) return; // Already initialized
+// --- MCP Tools Implementation ---
+
+async function runPromptWorkflow(task: string) {
+  // 1. Find the best matching workflow for the given task.
+  const workflowResults = workflowFuse.search(task);
   
-  try {
-    const { data: prompts, error } = await supabase
-      .from('prompts')
-      .select('*')
-      .eq('is_public', true);
-    
-    if (error) {
-      console.error('Error fetching prompts for search:', error);
-      return;
-    }
-    
-    // Transform database prompts to match expected format
-    const transformedPrompts: SearchPrompt[] = (prompts || []).map(p => ({
-      id: p.id.toString(),
-      title: p.title,
-      description: p.content.substring(0, 100) + '...', // Use content as description
-      content: p.content,
-      tags: p.tags,
-      likes: p.likes || 0,
-      model: p.model
-    }));
-    
-    promptFuse = new Fuse(transformedPrompts, {
-      keys: ['title', 'description', 'tags'],
-      includeScore: true,
-      threshold: 0.4,
-    });
-  } catch (error) {
-    console.error('Error initializing prompt search:', error);
-    // Initialize with empty array if Supabase is not available
-    promptFuse = new Fuse([], {
-      keys: ['title', 'description', 'tags'],
-      includeScore: true,
-      threshold: 0.4,
-    });
+  if (workflowResults.length === 0) {
+    // If no workflow is found, we could potentially fall back to finding a single prompt.
+    // For now, we'll indicate that no suitable workflow was found.
+    return {
+      type: 'no_workflow_found',
+      message: 'Could not find a suitable workflow for your task. Please try rephrasing.'
+    };
   }
+
+  const bestWorkflow = workflowResults[0].item;
+
+  // 2. Retrieve the full prompt objects for the workflow from the database.
+  // This ensures we get the most up-to-date prompt content from the user's vault.
+  const { data: prompts, error } = await supabase
+    .from('prompts')
+    .select('*')
+    .eq('user_id', FAKE_USER_ID)
+    .in('id', bestWorkflow.promptIds);
+
+  if (error) {
+    console.error('Error fetching prompts for workflow:', error);
+    throw new Error('Failed to retrieve prompts for the workflow.');
+  }
+
+  // 3. Order the prompts correctly according to the workflow definition.
+  const orderedPrompts = bestWorkflow.promptIds.map(id => 
+    prompts.find(p => p.id === id)
+  ).filter(Boolean); // Filter out any nulls if a prompt wasn't found
+
+  // 4. Return the structured prompt chain.
+  return {
+    type: 'prompt_chain',
+    workflow: {
+      name: bestWorkflow.name,
+      description: bestWorkflow.description,
+    },
+    prompts: orderedPrompts,
+  };
 }
 
-export async function GET() {
-  console.log('GET request received');
-  return NextResponse.json({ 
-    message: 'MCP endpoint - use POST for MCP protocol requests',
-    availableMethods: ['POST']
-  });
-}
+// --- API Route Handler ---
 
 export async function POST(request: Request) {
   try {
-    // Initialize prompt search if not already done
-    await initializePromptSearch();
-    
     const body = await request.json();
-    console.log('Received request:', JSON.stringify(body, null, 2));
     
-    // Handle MCP protocol messages
-    if (body.jsonrpc === '2.0') {
-      const { method, params, id } = body;
-      console.log('MCP method:', method, 'id:', id);
-      
-      switch (method) {
-        case 'initialize':
-          console.log('Handling initialize');
-          return NextResponse.json({
-            jsonrpc: '2.0',
-            id,
-            result: {
-              protocolVersion: '2024-11-05',
-              capabilities: {
-                tools: {}
-              },
-              serverInfo: {
-                name: 'promptpilot',
-                version: '1.0.0'
-              }
-            }
-          });
-          
-        case 'notifications/initialized':
-          console.log('Handling notifications/initialized');
-          return NextResponse.json({
-            jsonrpc: '2.0',
-            result: null
-          });
-          
-        case 'tools/list':
-          console.log('Handling tools/list');
-          return NextResponse.json({
-            jsonrpc: '2.0',
-            id,
-            result: {
-              tools: [
-                {
-                  name: 'get_best_prompt',
-                  description: 'Get the best matching prompt from the vault based on a query',
-                  inputSchema: {
-                    type: 'object',
-                    properties: {
-                      query: {
-                        type: 'string',
-                        description: 'The search query to find the best prompt'
-                      }
-                    },
-                    required: ['query']
-                  }
-                }
-              ]
-            }
-          });
-          
-        case 'tools/call':
-          console.log('Handling tools/call', params);
-          const { name, arguments: args } = params;
-          
-          if (name === 'get_best_prompt') {
-            const { query } = args;
-            
-            if (!query) {
-              return NextResponse.json({
-                jsonrpc: '2.0',
-                id,
-                error: {
-                  code: -32602,
-                  message: 'Query parameter is required'
-                }
-              });
-            }
+    if (body.jsonrpc !== '2.0') {
+      return NextResponse.json({ error: 'Invalid request: Not a JSON-RPC 2.0 request' }, { status: 400 });
+    }
 
-            // Search for a single prompt from database
-            if (promptFuse) {
-              const promptResults = promptFuse.search(query);
-              
-              if (promptResults.length > 0) {
-                const bestMatch = promptResults[0].item as SearchPrompt;
-                return NextResponse.json({
-                  jsonrpc: '2.0',
-                  id,
-                  result: {
-                    content: [
-                      {
-                        type: 'single_prompt',
-                        prompt: {
-                          id: bestMatch.id,
-                          title: bestMatch.title,
-                          description: bestMatch.description,
-                          content: bestMatch.content,
-                          tags: bestMatch.tags,
-                          model: bestMatch.model
-                        }
-                      }
-                    ]
-                  }
-                });
-              }
-            }
-            
-            return NextResponse.json({
-              jsonrpc: '2.0',
-              id,
-              result: {
-                content: [
-                  {
-                    type: 'text',
-                    text: 'No matching prompt found for your query. Try rephrasing your request or be more specific about what you need.'
-                  }
-                ]
-              }
-            });
-          }
-          break;
-      }
-    }
+    const { method, params, id } = body;
     
-    // Fallback for simple JSON requests (for testing)
-    const { query } = body;
-    if (query && promptFuse) {
-      const results = promptFuse.search(query);
-      if (results.length > 0) {
-        const bestMatch = results[0].item as SearchPrompt;
+    switch (method) {
+      case 'tools/list':
         return NextResponse.json({
-          id: bestMatch.id,
-          title: bestMatch.title,
-          description: bestMatch.description,
-          content: bestMatch.content,
-          tags: bestMatch.tags,
-          model: bestMatch.model
+          jsonrpc: '2.0',
+          id,
+          result: {
+            tools: [
+              {
+                name: 'run_prompt_workflow',
+                description: "Analyzes a user's task and returns an executable chain of prompts from the user's vault to accomplish the task.",
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    task: {
+                      type: 'string',
+                      description: 'The high-level task the user wants to accomplish. For example: "deep research on AI safety and make a summary."'
+                    },
+                  },
+                  required: ['task']
+                }
+              }
+            ]
+          }
         });
-      } else {
-        return NextResponse.json({ error: 'No matching prompt found' }, { status: 404 });
-      }
+
+      case 'tools/call':
+        if (params.name === 'run_prompt_workflow') {
+          const result = await runPromptWorkflow(params.arguments.task);
+          return NextResponse.json({ jsonrpc: '2.0', id, result });
+        }
+        return NextResponse.json({
+          jsonrpc: '2.0',
+          id,
+          error: { code: -32601, message: 'Method not found' }
+        });
+
+      // Default cases for initialize, etc. can be added here if needed.
+      case 'initialize':
+      case 'notifications/initialized':
+          return NextResponse.json({ jsonrpc: '2.0', id, result: null });
+          
+      default:
+        return NextResponse.json({
+          jsonrpc: '2.0',
+          id,
+          error: { code: -32601, message: 'Method not found' }
+        });
     }
-    
-    console.log('Invalid request - no jsonrpc or query found');
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   } catch (error) {
     console.error('Error in MCP endpoint:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'An unknown server error occurred.';
+    return NextResponse.json({ 
+      error: 'Internal Server Error', 
+      details: message 
+    }, { status: 500 });
   }
 } 

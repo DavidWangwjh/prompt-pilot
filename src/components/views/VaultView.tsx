@@ -38,7 +38,7 @@ export default function VaultView() {
           console.error('Error fetching vault prompts:', error);
           setError('Failed to load your prompts. Please try again later.');
       } else {
-          const fetchedPrompts: Prompt[] = (data || []).map(p => ({
+          const fetchedPrompts: Prompt[] = (data || []).map((p: any) => ({
               ...p,
               likes: p.likes || 0,
               is_public: p.is_public || false,
