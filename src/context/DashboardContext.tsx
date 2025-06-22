@@ -35,12 +35,12 @@ const initialPrompts: Prompt[] = [
   },
   { 
     id: 3, 
-    title: 'Midjourney Image Prompt', 
+    title: 'Image Prompt', 
     content: 'Create a photorealistic sci-fi concept art piece featuring a futuristic cityscape at sunset. The city should have towering glass and steel skyscrapers with holographic advertisements, flying vehicles weaving between buildings, and neon lights reflecting in puddles on the street. Include detailed atmospheric effects like lens flares, volumetric lighting, and a dramatic sky with storm clouds. The style should be cinematic and highly detailed, with a color palette of deep blues, purples, and warm oranges.', 
-    tags: ['art', 'midjourney', 'sci-fi', 'concept-art'], 
+    tags: ['art', 'sci-fi', 'concept-art'], 
     likes: 512, 
     comments: 89, 
-    model: 'Midjourney' 
+    model: 'GPT-4' 
   },
   { 
     id: 4, 

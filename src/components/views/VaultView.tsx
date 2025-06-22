@@ -6,7 +6,7 @@ import PromptCard from '@/components/PromptCard';
 import { clsx } from 'clsx';
 import { useDashboard, Prompt } from '@/context/DashboardContext';
 
-const availableModels = ['GPT-4', 'GPT-3.5', 'Claude', 'Gemini', 'Midjourney', 'DALL-E'];
+const availableModels = ['GPT-4', 'GPT-3.5', 'Claude', 'Gemini', 'DALL-E'];
 
 export default function VaultView() {
   const { prompts, addPrompt, updatePrompt, globalSearchTerm } = useDashboard();
@@ -138,7 +138,7 @@ export default function VaultView() {
     }
 
     // Model-specific tags
-    if (newPrompt.model === 'Midjourney' || newPrompt.model === 'DALL-E') {
+    if (newPrompt.model === 'DALL-E') {
       generatedTags.push('image-generation');
     }
     if (newPrompt.model === 'GPT-4' || newPrompt.model === 'Claude') {

@@ -10,10 +10,10 @@ const publicPrompts = [
       id: 101, 
       title: 'Epic Landscape Generator', 
       content: 'Create a breathtaking fantasy landscape that combines multiple biomes in a single scene. Include a majestic mountain range with snow-capped peaks, a lush forest valley with a winding river, ancient ruins partially covered in vegetation, and a mystical floating island with cascading waterfalls. The lighting should be dramatic with golden hour rays breaking through storm clouds, creating atmospheric perspective and depth. Include fantastical elements like glowing crystals, ethereal mist, and wildlife that fits the environment.', 
-      tags: ['art', 'midjourney', 'landscape', 'fantasy'], 
+      tags: ['art', 'landscape', 'fantasy'], 
       likes: 1800, 
       comments: 250, 
-      model: 'Midjourney' 
+      model: 'GPT-4' 
     },
     { 
       id: 102, 
@@ -143,9 +143,9 @@ const publicPrompts = [
     }
 ];
 
-// Filter out Midjourney and sort tags alphabetically
-const allTags = [...new Set(publicPrompts.flatMap(p => p.tags))].filter(tag => tag !== 'midjourney').sort();
-const allModels = [...new Set(publicPrompts.map(p => p.model))].filter(model => model !== 'Midjourney');
+// sort tags alphabetically
+const allTags = [...new Set(publicPrompts.flatMap(p => p.tags))].sort();
+const allModels = [...new Set(publicPrompts.map(p => p.model))];
 
 const FilterSection = ({ title, children }: { title: string, children: React.ReactNode }) => (
     <div className="py-4 border-b border-gray-100 last:border-b-0">
