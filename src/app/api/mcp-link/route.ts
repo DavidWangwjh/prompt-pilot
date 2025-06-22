@@ -8,50 +8,50 @@ type Prompt = Database['public']['Tables']['prompts']['Row'];
 const FAKE_USER_ID = 'f9df1fa1-1a38-494c-917e-ca3a3b80b75d';
 
 // Task analysis patterns
-const TASK_PATTERNS = {
-  research: /research|analyze|investigate|study|explore/i,
-  writing: /write|compose|create|draft|author/i,
-  summary: /summarize|summarise|condense|brief|recap/i,
-  coding: /code|program|develop|build|implement|debug/i,
-};
+// const TASK_PATTERNS = {
+//   research: /research|analyze|investigate|study|explore/i,
+//   writing: /write|compose|create|draft|author/i,
+//   summary: /summarize|summarise|condense|brief|recap/i,
+//   coding: /code|program|develop|build|implement|debug/i,
+// };
 
 // Task breakdown strategies
-const TASK_BREAKDOWN = {
-  research: ['background_research', 'deep_analysis', 'synthesis', 'summary'],
-  writing: ['outline', 'draft', 'review', 'polish'],
-  coding: ['planning', 'implementation', 'testing', 'documentation'],
-  planning: ['goal_setting', 'strategy_development', 'timeline', 'execution_plan'],
-  problem_solving: ['problem_analysis', 'solution_generation', 'evaluation', 'implementation'],
-  creative: ['inspiration', 'ideation', 'development', 'refinement']
-};
+// const TASK_BREAKDOWN = {
+//   research: ['background_research', 'deep_analysis', 'synthesis', 'summary'],
+//   writing: ['outline', 'draft', 'review', 'polish'],
+//   coding: ['planning', 'implementation', 'testing', 'documentation'],
+//   planning: ['goal_setting', 'strategy_development', 'timeline', 'execution_plan'],
+//   problem_solving: ['problem_analysis', 'solution_generation', 'evaluation', 'implementation'],
+//   creative: ['inspiration', 'ideation', 'development', 'refinement']
+// };
 
-interface TaskAnalysis {
-  primaryType: string;
-  secondaryTypes: string[];
-  complexity: 'low' | 'medium' | 'high';
-  estimatedSteps: number;
-  keywords: string[];
-  breakdown: string[];
-}
+// interface TaskAnalysis {
+//   primaryType: string;
+//   secondaryTypes: string[];
+//   complexity: 'low' | 'medium' | 'high';
+//   estimatedSteps: number;
+//   keywords: string[];
+//   breakdown: string[];
+// }
 
-interface ExecutionPlan {
-  task: string;
-  analysis: TaskAnalysis;
-  prompts: Array<{
-    id: number;
-    title: string;
-    content: string;
-    order: number;
-    step: string;
-    instructions: string;
-  }>;
-  totalSteps: number;
-  estimatedTime: string;
-  executionInstructions: string;
-}
+// interface ExecutionPlan {
+//   task: string;
+//   analysis: TaskAnalysis;
+//   prompts: Array<{
+//     id: number;
+//     title: string;
+//     content: string;
+//     order: number;
+//     step: string;
+//     instructions: string;
+//   }>;
+//   totalSteps: number;
+//   estimatedTime: string;
+//   executionInstructions: string;
+// }
 
 // --- Task Analysis Logic ---
-const ACTION_VERBS = {
+const ACTION_VERBS: Record<string, RegExp> = {
     research: /research|analyze|investigate|study|explore|find/i,
     write: /write|compose|create|draft|author|generate/i,
     summarize: /summarize|summarise|condense|brief|recap|summary/i,
@@ -65,7 +65,7 @@ async function analyzeTask(task: string) {
 
     // Identify the sequence of actions
     const actions = Object.keys(ACTION_VERBS)
-        .map(verb => ({ verb, index: lowerCaseTask.search((ACTION_VERBS as any)[verb]) }))
+        .map(verb => ({ verb, index: lowerCaseTask.search(ACTION_VERBS[verb]) }))
         .filter(item => item.index !== -1)
         .sort((a, b) => a.index - b.index)
         .map(item => item.verb);
@@ -122,7 +122,7 @@ async function findSuitablePrompts(analysis: { actions: string[]; keywords: stri
     for (const action of analysis.actions) {
         let bestPrompt: Prompt | null = null;
         let highestScore = 0;
-        const actionPattern = (ACTION_VERBS as any)[action];
+        const actionPattern = (ACTION_VERBS)[action];
 
         if (!actionPattern) {
             console.log(`[MCP] No action pattern found for: ${action}`);

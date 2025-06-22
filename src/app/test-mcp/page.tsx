@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Bot, ChevronDown, ChevronUp, Loader2, Workflow, Send, Database, AlertTriangle } from 'lucide-react';
+import { Loader2, Workflow, Send, Database, AlertTriangle } from 'lucide-react';
 
 // --- Types ---
 interface Prompt {
@@ -18,11 +18,6 @@ interface ExecutionPlan {
     keywords: string[];
   };
   prompts: Prompt[];
-}
-
-interface McpResult {
-  finalAnswer: string;
-  executionPlan: ExecutionPlan;
 }
 
 // --- Components ---
