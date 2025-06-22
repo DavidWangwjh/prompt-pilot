@@ -40,7 +40,7 @@ async function runGenerate(prompt: string) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { action, promptA, promptB, model } = body;
+    const { action, promptA, promptB } = body;
 
     if (action === 'generate_and_judge') {
         if (!promptA || !promptB) {
