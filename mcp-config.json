@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "promptpilot": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-nextjs", "https://mcprompt.vercel.app/api/mcp-link"],
+      "command": "node",
+      "args": ["mcp-server.js"],
       "env": {}
     }
   }
