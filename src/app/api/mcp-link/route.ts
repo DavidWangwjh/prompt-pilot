@@ -1,54 +1,132 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { Database } from '@/lib/database.types';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+// MCP Protocol types
+// --- Error type for MCPResponse ---
+interface MCPError {
+  code: number;
+  message: string;
+}
+
+// --- Tool argument types ---
+type ListPromptsParams = { category?: string; search?: string };
+type GetPromptParams = { id: number };
+type SearchPromptsParams = { query: string; limit?: number };
+type CreateExecutionPlanParams = { task: string };
+type ExecutePromptChainParams = { prompts: Prompt[] };
+
+type ToolCallParams =
+  | ({ name: 'list_prompts'; arguments: ListPromptsParams })
+  | ({ name: 'get_prompt'; arguments: GetPromptParams })
+  | ({ name: 'search_prompts'; arguments: SearchPromptsParams })
+  | ({ name: 'create_execution_plan'; arguments: CreateExecutionPlanParams })
+  | ({ name: 'execute_prompt_chain'; arguments: ExecutePromptChainParams });
+
+type MCPRequest =
+  | { jsonrpc: '2.0'; id: number | string; method: 'initialize'; params?: undefined }
+  | { jsonrpc: '2.0'; id: number | string; method: 'tools/list'; params?: undefined }
+  | { jsonrpc: '2.0'; id: number | string; method: 'tools/call'; params: ToolCallParams };
+
+type MCPResponse =
+  | { jsonrpc: '2.0'; id: number | string; result?: unknown; error?: undefined }
+  | { jsonrpc: '2.0'; id: number | string; result?: undefined; error?: MCPError };
+
+// Prompt type definition based on database schema
 type Prompt = Database['public']['Tables']['prompts']['Row'];
 
+// MCP Tool definitions
+const tools = [
+  {
+    name: 'list_prompts',
+    description: 'List all available prompts in the PromptPilot vault',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        category: {
+          type: 'string',
+          description: 'Optional category filter'
+        },
+        search: {
+          type: 'string',
+          description: 'Optional search term to filter prompts'
+        }
+      }
+    }
+  },
+  {
+    name: 'get_prompt',
+    description: 'Get a specific prompt by ID',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'number',
+          description: 'The ID of the prompt to retrieve'
+        }
+      },
+      required: ['id']
+    }
+  },
+  {
+    name: 'search_prompts',
+    description: 'Search prompts by content, tags, or description',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Search query'
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of results to return',
+          default: 10
+        }
+      },
+      required: ['query']
+    }
+  },
+  {
+    name: 'create_execution_plan',
+    description: 'Create an execution plan for a given task using relevant prompts from the vault',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task: {
+          type: 'string',
+          description: 'The task to create an execution plan for'
+        }
+      },
+      required: ['task']
+    }
+  },
+  {
+    name: 'execute_prompt_chain',
+    description: 'Execute a chain of prompts in sequence',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        prompts: {
+          type: 'array',
+          description: 'Array of prompts to execute in order',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              content: { type: 'string' },
+              variables: { type: 'object' }
+            }
+          }
+        }
+      },
+      required: ['prompts']
+    }
+  }
+];
+
 const FAKE_USER_ID = 'f9df1fa1-1a38-494c-917e-ca3a3b80b75d';
-
-// Task analysis patterns
-// const TASK_PATTERNS = {
-//   research: /research|analyze|investigate|study|explore/i,
-//   writing: /write|compose|create|draft|author/i,
-//   summary: /summarize|summarise|condense|brief|recap/i,
-//   coding: /code|program|develop|build|implement|debug/i,
-// };
-
-// Task breakdown strategies
-// const TASK_BREAKDOWN = {
-//   research: ['background_research', 'deep_analysis', 'synthesis', 'summary'],
-//   writing: ['outline', 'draft', 'review', 'polish'],
-//   coding: ['planning', 'implementation', 'testing', 'documentation'],
-//   planning: ['goal_setting', 'strategy_development', 'timeline', 'execution_plan'],
-//   problem_solving: ['problem_analysis', 'solution_generation', 'evaluation', 'implementation'],
-//   creative: ['inspiration', 'ideation', 'development', 'refinement']
-// };
-
-// interface TaskAnalysis {
-//   primaryType: string;
-//   secondaryTypes: string[];
-//   complexity: 'low' | 'medium' | 'high';
-//   estimatedSteps: number;
-//   keywords: string[];
-//   breakdown: string[];
-// }
-
-// interface ExecutionPlan {
-//   task: string;
-//   analysis: TaskAnalysis;
-//   prompts: Array<{
-//     id: number;
-//     title: string;
-//     content: string;
-//     order: number;
-//     step: string;
-//     instructions: string;
-//   }>;
-//   totalSteps: number;
-//   estimatedTime: string;
-//   executionInstructions: string;
-// }
 
 // --- Task Analysis Logic ---
 const ACTION_VERBS: Record<string, RegExp> = {
@@ -122,18 +200,12 @@ async function findSuitablePrompts(analysis: { actions: string[]; keywords: stri
     for (const action of analysis.actions) {
         let bestPrompt: Prompt | null = null;
         let highestScore = 0;
-        const actionPattern = (ACTION_VERBS)[action];
+        const actionPattern = ACTION_VERBS[action];
 
-        if (!actionPattern) {
-            console.log(`[MCP] No action pattern found for: ${action}`);
-            continue;
-        }
+        if (!actionPattern) continue;
 
         for (const prompt of userPrompts) {
-            if (usedPromptIds.has(prompt.id)) {
-                continue; // Don't reuse prompts
-            }
-
+            if (usedPromptIds.has(prompt.id)) continue;
             const score = calculateRelevance(prompt, actionPattern, analysis.keywords);
             if (score > highestScore) {
                 highestScore = score;
@@ -141,15 +213,35 @@ async function findSuitablePrompts(analysis: { actions: string[]; keywords: stri
             }
         }
 
-        if (bestPrompt) {
-            console.log(`[MCP] Best prompt for action '${action}' is '${bestPrompt.title}' with score ${highestScore}`);
+        if (bestPrompt && highestScore > 0) {
             finalPrompts.push(bestPrompt);
             usedPromptIds.add(bestPrompt.id);
-        } else {
-            console.log(`[MCP] No suitable prompt found for action: ${action}`);
         }
     }
-    
+
+    // If the user asked for a summary and no summary prompt was found, try to find a generic summary prompt
+    if (
+        analysis.actions.includes('summarize') &&
+        !finalPrompts.some(p => /summary|summarize|condense|recap/i.test(p.title + p.content))
+    ) {
+        let bestSummaryPrompt: Prompt | null = null;
+        let bestScore = 0;
+        for (const prompt of userPrompts) {
+            if (usedPromptIds.has(prompt.id)) continue;
+            if (/summary|summarize|condense|recap/i.test(prompt.title + prompt.content)) {
+                const score = calculateRelevance(prompt, /summary|summarize|condense|recap/i, analysis.keywords);
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestSummaryPrompt = prompt;
+                }
+            }
+        }
+        if (bestSummaryPrompt) {
+            finalPrompts.push(bestSummaryPrompt);
+            usedPromptIds.add(bestSummaryPrompt.id);
+        }
+    }
+
     return finalPrompts;
 }
 
@@ -159,8 +251,7 @@ async function rerankAndVerifyWithLLM(task: string, candidatePrompts: Prompt[]) 
     console.log('[MCP] Using LLM to rerank and verify candidate prompts.');
     const API_KEY = process.env.GEMINI_API_KEY;
     if (!API_KEY) {
-        console.warn('[MCP] GEMINI_API_KEY not set, falling back to keyword-based ranking.');
-        return candidatePrompts;
+        throw new Error('GEMINI_API_KEY is not set for the reranker.');
     }
     const genAI = new GoogleGenerativeAI(API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -257,6 +348,7 @@ async function createExecutionPlan(task: string) {
             ...prompt,
             order: index + 1,
         })),
+        instructions: `The MCP will execute these prompts in order to complete your task.`
     };
 }
 
@@ -279,7 +371,8 @@ async function executePromptChain(prompts: Prompt[]) {
     const genAI = new GoogleGenerativeAI(API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    let context = ""; // This will hold the output from the previous step
+    let context = "";
+    const trace: Array<{step: number, prompt: {id: number, title: string, content: string}, output: string}> = [];
 
     for (let i = 0; i < prompts.length; i++) {
         const prompt = prompts[i];
@@ -288,52 +381,39 @@ async function executePromptChain(prompts: Prompt[]) {
         const fullPrompt = `Context from previous step (if any):\n---\n${context}\n---\n\nYour task for this step:\n---\n${prompt.content}\n---`;
         const result = await model.generateContent(fullPrompt);
         context = result.response.text();
+        trace.push({
+            step: i + 1,
+            prompt: {
+                id: prompt.id,
+                title: prompt.title,
+                content: prompt.content
+            },
+            output: context
+        });
         console.log(`[MCP] Step ${i + 1} completed. Context updated.`);
     }
 
     console.log('[MCP] Autonomous execution finished.');
-    return context; // Return the final result
+    return { trace, finalAnswer: context };
 }
 
-export async function GET() {
-  const discovery = {
-    jsonrpc: '2.0',
-    id: null,
-    result: {
-      protocolVersion: '2024-11-05',
-      serverInfo: { name: 'PromptPilot MCP', version: '1.0.0' },
-      capabilities: {
-        tools: {
-          web:                   { description: 'Browser-based HTTP client' },
-          python:                { description: 'Headless Python REPL for private analysis' },
-          create_execution_plan: { description: "Analyzes a user's task and creates a sequential plan of prompts" },
-          execute_prompt_chain:  { description: 'Executes an ordered chain of prompts' }
-        }
-      }
-    }
-  }
 
-  const stream = new ReadableStream({
-    start(ctrl) {
-      ctrl.enqueue(`data: ${JSON.stringify(discovery)}\n\n`)
-      ctrl.close()
-    }
-  })
-
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive'
-    }
-  })
-}
-
-export async function POST(request: Request) {
-  const body = await request.json()
-  const { method, params, id } = body
-
+// --- API Route Handler ---
+export async function POST(request: NextRequest) {
   try {
+    const body: MCPRequest = await request.json();
+    const { jsonrpc, id, method, params } = body;
+
+    if (jsonrpc !== '2.0') {
+      return NextResponse.json({
+        jsonrpc: '2.0',
+        id,
+        error: { code: -32600, message: 'Invalid Request' }
+      } as MCPResponse);
+    }
+
+    const supabase = await createSupabaseServerClient();
+
     switch (method) {
       case 'initialize':
         return NextResponse.json({
@@ -341,76 +421,111 @@ export async function POST(request: Request) {
           id,
           result: {
             protocolVersion: '2024-11-05',
-            serverInfo: { name: 'PromptPilot MCP', version: '1.0.0' },
-            capabilities: { tools: {} }
+            capabilities: {
+              tools: {}
+            },
+            serverInfo: {
+              name: 'promptpilot-mcp',
+              version: '1.0.0'
+            }
           }
-        })
+        } as MCPResponse);
 
       case 'tools/list':
         return NextResponse.json({
           jsonrpc: '2.0',
           id,
-          result: {
-            tools: [
-              {
-                name: 'create_execution_plan',
-                description:
-                  "Analyzes a user's task and creates a sequential plan of prompts from the user's vault.",
-                inputSchema: {
-                  type: 'object',
-                  properties: {
-                    task: { type: 'string', description: 'The task to accomplish.' }
-                  },
-                  required: ['task']
-                }
-              },
-              {
-                name: 'execute_prompt_chain',
-                description:
-                  'Executes an ordered chain of prompts, feeding the output of each step as context to the next.',
-                inputSchema: {
-                  type: 'object',
-                  properties: {
-                    prompts: {
-                      type: 'array',
-                      description: 'An array of prompt objects to execute in sequence.',
-                      items: { type: 'object' }
-                    }
-                  },
-                  required: ['prompts']
-                }
-              }
-            ]
-          }
-        })
+          result: { tools }
+        } as MCPResponse);
 
       case 'tools/call':
-        if (params.name === 'create_execution_plan') {
-          const plan = await createExecutionPlan(params.arguments.task)
-          return NextResponse.json({ jsonrpc: '2.0', id, result: plan })
+        const { name, arguments: args } = params;
+        
+        switch (name) {
+          case 'list_prompts':
+            const { data: prompts, error } = await supabase
+              .from('prompts')
+              .select('*')
+              .order('created_at', { ascending: false });
+            
+            if (error) throw error;
+            
+            return NextResponse.json({
+              jsonrpc: '2.0',
+              id,
+              result: { prompts }
+            } as MCPResponse);
+
+          case 'get_prompt':
+            const { data: prompt, error: promptError } = await supabase
+              .from('prompts')
+              .select('*')
+              .eq('id', args.id)
+              .single();
+            
+            if (promptError) throw promptError;
+            
+            return NextResponse.json({
+              jsonrpc: '2.0',
+              id,
+              result: { prompt }
+            } as MCPResponse);
+
+          case 'search_prompts':
+            const { data: searchResults, error: searchError } = await supabase
+              .from('prompts')
+              .select('*')
+              .or(`title.ilike.%${args.query}%,content.ilike.%${args.query}%`)
+              .limit(args.limit || 10)
+              .order('created_at', { ascending: false });
+            
+            if (searchError) throw searchError;
+            
+            return NextResponse.json({
+              jsonrpc: '2.0',
+              id,
+              result: { prompts: searchResults }
+            } as MCPResponse);
+
+          case 'create_execution_plan': {
+            const executionPlan = await createExecutionPlan(args.task);
+            return NextResponse.json({
+              jsonrpc: '2.0',
+              id,
+              result: executionPlan
+            } as MCPResponse);
+          }
+
+          case 'execute_prompt_chain': {
+            const { trace, finalAnswer } = await executePromptChain(args.prompts);
+            return NextResponse.json({
+              jsonrpc: '2.0',
+              id,
+              result: { trace, finalAnswer }
+            } as MCPResponse);
+          }
+
+          default:
+            return NextResponse.json({
+              jsonrpc: '2.0',
+              id,
+              error: { code: -32601, message: 'Method not found' }
+            } as MCPResponse);
         }
-        if (params.name === 'execute_prompt_chain') {
-          const out = await executePromptChain(params.arguments.prompts)
-          return NextResponse.json({
-            jsonrpc: '2.0',
-            id,
-            result: { finalAnswer: out }
-          })
-        }
-        throw new Error(`Tool not found: ${params.name}`)
 
       default:
-        throw new Error(`Method not found: ${method}`)
+        return NextResponse.json({
+          jsonrpc: '2.0',
+          id,
+          error: { code: -32601, message: 'Method not found' }
+        } as MCPResponse);
     }
-  } catch (err) {
-    console.error('[MCP] error', err)
+  } catch (error) {
+    console.error('MCP API Error:', error);
     return NextResponse.json({
       jsonrpc: '2.0',
-      id: id ?? null,
-      error: {
-        code: -32603,
-        message: err instanceof Error ? err.message : 'Internal error'
-      }
-    })
+      id: 'error',
+      error: { code: -32603, message: 'Internal error' }
+    } as MCPResponse);
   }
 }
