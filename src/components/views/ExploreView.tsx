@@ -2,45 +2,20 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import PromptCard from '@/components/PromptCard';
-import { Search, Filter, X, ChevronDown, Loader2 } from 'lucide-react';
+import { Search, X, ChevronDown, Loader2, ThumbsUp, Copy, Check } from 'lucide-react';
 import { useDashboard, Prompt } from '@/context/DashboardContext';
 import { supabase } from '@/lib/supabase';
 
-const FilterSection = ({ title, children }: { title: string, children: React.ReactNode }) => (
-    <div className="py-4 border-b border-gray-100 last:border-b-0">
-        <h3 className="font-semibold text-gray-900 mb-3 text-sm uppercase tracking-wide">{title}</h3>
-        <div className="space-y-2">
-            {children}
-        </div>
-    </div>
-);
-
-const FilterCheckbox = ({ id, label, checked, onChange }: { id: string, label: string, checked: boolean, onChange: () => void }) => (
-    <div className="flex items-center group cursor-pointer">
-        <input 
-            id={id} 
-            type="checkbox" 
-            checked={checked} 
-            onChange={onChange} 
-            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 transition-all duration-200" 
-        />
-        <label htmlFor={id} className="ml-3 text-sm text-gray-600 group-hover:text-gray-900 transition-colors duration-200 cursor-pointer">
-            {label}
-        </label>
-    </div>
-);
-
 export default function ExploreView() {
-    const { savePromptFromExplore, likedPrompts, globalSearchTerm } = useDashboard();
+    const { savePromptFromExplore, likedPrompts, globalSearchTerm, toggleLike } = useDashboard();
     const [prompts, setPrompts] = useState<Prompt[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [selectedTags, setSelectedTags] = useState<string[]>([]);
-    const [selectedModels, setSelectedModels] = useState<string[]>([]);
-    const [sortBy, setSortBy] = useState('newest');
-    const [showFilters, setShowFilters] = useState(false);
-    const [tagsToShow, setTagsToShow] = useState(10);
+    const [selectedModel, setSelectedModel] = useState<string>('All Models');
     const [savingPrompt, setSavingPrompt] = useState<number | null>(null);
+    const [showDetailModal, setShowDetailModal] = useState<Prompt | null>(null);
+    const [copied, setCopied] = useState(false);
+    const [showToast, setShowToast] = useState(false);
 
     useEffect(() => {
         const fetchPrompts = async () => {
@@ -56,14 +31,10 @@ export default function ExploreView() {
                 console.error('Error fetching prompts:', error);
                 setError('Failed to load prompts. Please try again later.');
             } else {
-                const fetchedPrompts: Prompt[] = (data || []).map((p: any) => ({
-                    id: p.id,
-                    title: p.title,
-                    content: p.content,
-                    tags: p.tags,
-                    model: p.model,
-                    comments: p.comments || 0,
+                const fetchedPrompts: Prompt[] = (data || []).map(p => ({
+                    ...p,
                     likes: p.likes || 0,
+                    is_public: p.is_public ?? true,
                 }));
                 setPrompts(fetchedPrompts);
             }
@@ -73,12 +44,8 @@ export default function ExploreView() {
         fetchPrompts();
     }, []);
 
-    const allTags = useMemo(() => {
-        return [...new Set(prompts.flatMap(p => p.tags))].sort();
-    }, [prompts]);
-
     const allModels = useMemo(() => {
-        return [...new Set(prompts.map(p => p.model))];
+        return ['All Models', ...new Set(prompts.map(p => p.model))];
     }, [prompts]);
     
     // Create dynamic prompts that include like state
@@ -89,32 +56,12 @@ export default function ExploreView() {
         }));
     }, [prompts, likedPrompts]);
 
-    const handleTagChange = (tag: string) => {
-        setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
-    };
-
-    const handleModelChange = (model: string) => {
-        setSelectedModels(prev => prev.includes(model) ? prev.filter(m => m !== model) : [...prev, model]);
-    };
-
-    const clearFilters = () => {
-        setSelectedTags([]);
-        setSelectedModels([]);
-        setSortBy('newest');
-    };
-
-    const loadMoreTags = () => {
-        setTagsToShow(prev => Math.min(prev + 10, allTags.length));
-    };
-
-    const activeFiltersCount = selectedTags.length + selectedModels.length;
-
     const filteredPrompts = useMemo(() => {
         let prompts = dynamicPrompts;
 
-        // Apply global search filter
+        // Apply global search filter only if there's a search term
         if (globalSearchTerm.trim()) {
-            const searchLower = globalSearchTerm.toLowerCase();
+            const searchLower = globalSearchTerm.trim().toLowerCase();
             prompts = prompts.filter(prompt => 
                 prompt.title.toLowerCase().includes(searchLower) ||
                 prompt.content.toLowerCase().includes(searchLower) ||
@@ -123,33 +70,24 @@ export default function ExploreView() {
             );
         }
 
-        if (selectedTags.length > 0) {
-            prompts = prompts.filter(p => selectedTags.every(tag => p.tags.includes(tag)));
-        }
-        
-        if (selectedModels.length > 0) {
-            prompts = prompts.filter(p => selectedModels.includes(p.model));
+        // Apply model filter
+        if (selectedModel !== 'All Models') {
+            prompts = prompts.filter(p => p.model === selectedModel);
         }
 
-        switch (sortBy) {
-            case 'newest':
-                prompts.sort((a, b) => b.id - a.id);
-                break;
-            case 'most-liked':
-                prompts.sort((a, b) => b.likes - a.likes);
-                break;
-            default:
-                prompts.sort((a, b) => b.id - a.id);
-                break;
-        }
+        // Sort by likes (most liked first)
+        prompts.sort((a, b) => b.likes - a.likes);
 
         return prompts;
-    }, [dynamicPrompts, globalSearchTerm, selectedTags, selectedModels, sortBy]);
+    }, [dynamicPrompts, globalSearchTerm, selectedModel]);
+
+    // Get top 3 and rest of prompts
+    const top3Prompts = filteredPrompts.slice(0, 3);
+    const restPrompts = filteredPrompts.slice(3);
     
     const handleSavePrompt = async (prompt: Prompt) => {
         setSavingPrompt(prompt.id);
         try {
-            // Create a new object without the id field
             const promptWithoutId = {
                 title: prompt.title,
                 content: prompt.content,
@@ -159,14 +97,29 @@ export default function ExploreView() {
                 is_public: prompt.is_public
             };
             await savePromptFromExplore(promptWithoutId);
-            // Could add a toast notification here for success
+            setShowToast(true);
+            setTimeout(() => setShowToast(false), 3000);
             console.log('Prompt saved successfully!');
         } catch (error) {
             console.error('Failed to save prompt:', error);
-            // Could add a toast notification here for error
         } finally {
             setSavingPrompt(null);
         }
+    };
+
+    const handleCopy = async (content: string) => {
+        try {
+            await navigator.clipboard.writeText(content);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch (err) {
+            console.error('Failed to copy text: ', err);
+        }
+    };
+
+    const handleLike = (e: React.MouseEvent, promptId: number) => {
+        e.stopPropagation();
+        toggleLike(promptId);
     };
 
     if (loading) {
@@ -188,114 +141,164 @@ export default function ExploreView() {
     }
 
     return (
-        <div className="flex flex-col lg:flex-row gap-6 p-4 sm:p-6">
-            {/* Mobile Filter Toggle */}
-            <div className="lg:hidden flex items-center justify-between">
-                <button
-                    onClick={() => setShowFilters(!showFilters)}
-                    className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all duration-200 btn-hover"
-                >
-                    <Filter size={20} />
-                    <span>Filters</span>
-                    {activeFiltersCount > 0 && (
-                        <span className="bg-blue-600 text-white text-xs rounded-full px-2 py-1">
-                            {activeFiltersCount}
-                        </span>
-                    )}
-                </button>
-                {activeFiltersCount > 0 && (
-                    <button
-                        onClick={clearFilters}
-                        className="text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
+        <div className="p-4 sm:p-6 space-y-8">
+            {/* Model Filter */}
+            <div className="flex justify-center">
+                <div className="relative w-64">
+                    <select
+                        value={selectedModel}
+                        onChange={(e) => setSelectedModel(e.target.value)}
+                        className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 appearance-none cursor-pointer"
                     >
-                        Clear all
-                    </button>
-                )}
-            </div>
-
-            {/* Filter Sidebar */}
-            <aside className={`lg:w-64 lg:shrink-0 transition-all duration-300 ${
-                showFilters ? 'block' : 'hidden lg:block'
-            }`}>
-                <div className="lg:sticky lg:top-6 bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
-                    <div className="lg:hidden flex items-center justify-between mb-4">
-                        <h2 className="text-lg font-bold text-gray-900">Filters</h2>
-                        <button
-                            onClick={() => setShowFilters(false)}
-                            className="p-1 hover:bg-gray-100 rounded-full transition-colors duration-200"
-                        >
-                            <X size={20} />
-                        </button>
-                    </div>
-
-                    <div className="hidden lg:block">
-                        <h2 className="text-xl font-bold text-gray-900 mb-4">Filters</h2>
-                    </div>
-
-                    <div className="space-y-4">
-                    <FilterSection title="Sort By">
-                            <div className="space-y-2">
-                        <div className="flex items-center">
-                                    <input id="sort-newest" type="radio" name="sort" checked={sortBy === 'newest'} onChange={() => setSortBy('newest')} className="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500 transition-all duration-200" />
-                                    <label htmlFor="sort-newest" className="ml-3 text-sm text-gray-600 cursor-pointer hover:text-gray-900 transition-colors duration-200">Newest</label>
-                        </div>
-                        <div className="flex items-center">
-                                    <input id="sort-most-liked" type="radio" name="sort" checked={sortBy === 'most-liked'} onChange={() => setSortBy('most-liked')} className="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500 transition-all duration-200" />
-                                    <label htmlFor="sort-most-liked" className="ml-3 text-sm text-gray-600 cursor-pointer hover:text-gray-900 transition-colors duration-200">Most Liked</label>
-                        </div>
-                        </div>
-                    </FilterSection>
-
-                    <FilterSection title="Models">
                         {allModels.map(model => (
-                            <FilterCheckbox key={model} id={`model-${model}`} label={model} checked={selectedModels.includes(model)} onChange={() => handleModelChange(model)} />
+                            <option key={model} value={model}>{model}</option>
                         ))}
-                    </FilterSection>
-
-                    <FilterSection title="Tags">
-                            {allTags.slice(0, tagsToShow).map((tag: string) => (
-                            <FilterCheckbox key={tag} id={`tag-${tag}`} label={tag} checked={selectedTags.includes(tag)} onChange={() => handleTagChange(tag)} />
-                        ))}
-                            {tagsToShow < allTags.length && (
-                                <button
-                                    onClick={loadMoreTags}
-                                    className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 transition-colors duration-200 mt-2"
-                                >
-                                    <span>Load more</span>
-                                    <ChevronDown size={16} />
-                                </button>
-                            )}
-                    </FilterSection>
-                    </div>
-                </div>
-            </aside>
-
-            {/* Main Content */}
-            <div className="flex-1">
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
-                    {filteredPrompts.length > 0 ? (
-                        filteredPrompts.map((prompt) => (
-                            <div key={prompt.id} className="animate-fade-in">
-                                <PromptCard 
-                                    {...prompt}
-                                    source="explore"
-                                    view="grid" 
-                                    onSave={() => handleSavePrompt(prompt)}
-                                    isSaving={savingPrompt === prompt.id}
-                                />
-                            </div>
-                        ))
-                    ) : (
-                        <div className="col-span-full flex flex-col items-center justify-center py-12 text-center">
-                            <div className="text-gray-400 mb-4">
-                                <Search size={48} />
-                            </div>
-                            <p className="text-gray-500 text-lg font-medium">No prompts found</p>
-                            <p className="text-gray-400 text-sm mt-1">Try adjusting your filters</p>
-                        </div>
-                    )}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={20} />
                 </div>
             </div>
+
+            {/* Top 3 Featured Section */}
+            {top3Prompts.length > 0 && (
+                <div className="space-y-4">
+                    <h2 className="text-3xl font-bold text-gray-900 text-center">⭐ Top 3 Picks ⭐</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {top3Prompts.map((prompt) => (
+                            <PromptCard
+                                key={prompt.id}
+                                {...prompt}
+                                source="explore"
+                                view="grid"
+                                onSave={() => handleSavePrompt(prompt)}
+                                isSaving={savingPrompt === prompt.id}
+                                size="large"
+                                variant="featured"
+                                is_public={prompt.is_public || false}
+                            />
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Rest of Prompts Grid */}
+            {restPrompts.length > 0 && (
+                <div className="space-y-4">
+                    <h3 className="text-xl font-bold text-gray-900">More Prompts</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {restPrompts.map((prompt) => (
+                            <PromptCard
+                                key={prompt.id}
+                                {...prompt}
+                                source="explore"
+                                view="grid" 
+                                onSave={() => handleSavePrompt(prompt)}
+                                isSaving={savingPrompt === prompt.id}
+                                size="small"
+                                is_public={prompt.is_public || false}
+                            />
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* No Results */}
+            {filteredPrompts.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="text-gray-400 mb-4">
+                        <Search size={48} />
+                    </div>
+                    <p className="text-gray-500 text-lg font-medium">No prompts found</p>
+                    <p className="text-gray-400 text-sm mt-1">Try adjusting your search or model filter</p>
+                </div>
+            )}
+
+            {/* Detail Modal */}
+            {showDetailModal && (
+                <div className="fixed inset-0 backdrop-blur-xs bg-opacity-10 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                            <div>
+                                <h2 className="text-xl font-bold text-gray-900">{showDetailModal.title}</h2>
+                                <p className="text-sm text-gray-500 mt-1">Model: {showDetailModal.model}</p>
+                            </div>
+                            <button
+                                onClick={() => setShowDetailModal(null)}
+                                className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
+                            >
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-6">
+                            {/* Tags */}
+                            <div>
+                                <h3 className="text-sm font-semibold text-gray-900 mb-2">Tags</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {showDetailModal.tags.map((tag) => (
+                                        <span key={tag} className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
+                                            {tag}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Prompt Content */}
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <h3 className="text-sm font-semibold text-gray-900">Prompt Content</h3>
+                                    <button
+                                        onClick={() => handleCopy(showDetailModal.content)}
+                                        className="flex items-center space-x-2 px-3 py-1 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-all duration-200 btn-hover"
+                                    >
+                                        {copied ? (
+                                            <>
+                                                <Copy size={16} />
+                                                <span>Copied!</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Copy size={16} />
+                                                <span>Copy</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                    <pre className="text-sm text-gray-800 font-mono whitespace-pre-wrap leading-relaxed">{showDetailModal.content}</pre>
+                                </div>
+                            </div>
+
+                            {/* Stats */}
+                            <div className="flex items-center gap-6 text-sm text-gray-500">
+                                <button 
+                                    className={`flex items-center gap-1 transition-all duration-200 cursor-pointer ${
+                                        likedPrompts.has(showDetailModal.id)
+                                            ? 'text-blue-600 hover:text-blue-700' 
+                                            : 'text-gray-500 hover:text-blue-600'
+                                    }`}
+                                    onClick={(e) => handleLike(e, showDetailModal.id)}
+                                >
+                                    <ThumbsUp 
+                                        size={16} 
+                                        className={`${
+                                            likedPrompts.has(showDetailModal.id) ? 'fill-current' : ''
+                                        }`} 
+                                    />
+                                    <span>{showDetailModal.likes} likes</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Toast Notification */}
+            {showToast && (
+                <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 animate-fade-in">
+                    <Check size={20} />
+                    <span className="font-medium">This prompt has been saved to your vault!</span>
+                </div>
+            )}
         </div>
     );
 }

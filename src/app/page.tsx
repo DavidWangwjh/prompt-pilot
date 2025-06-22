@@ -47,11 +47,7 @@ export default function LandingPage() {
               </div>
 
               <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl lg:text-7xl/none bg-gradient-to-r from-gray-900 via-blue-800 to-purple-800 bg-clip-text text-transparent animate-in slide-in-from-bottom-4 duration-1000">
-                Prompts + MCP =
-                <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 mt-4 block">
-                  Personalized AI Workflows
-                </span>
+                Manage. Chain. Execute.
               </h1>
               
               <p className="mx-auto max-w-[700px] text-gray-600 md:text-xl leading-relaxed animate-in slide-in-from-bottom-4 duration-1000 delay-200">
@@ -96,22 +92,22 @@ export default function LandingPage() {
               </div>
 
               <div className="text-center p-6 rounded-2xl bg-white/70 backdrop-blur-sm border border-gray-200/50 hover:shadow-lg transition-all duration-300 hover:scale-105">
-                <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Users className="h-6 w-6 text-purple-600" />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Community Driven</h3>
-                <p className="text-gray-600">
-                  Share and discover prompts from a growing community of AI enthusiasts.
-                </p>
-              </div>
-
-              <div className="text-center p-6 rounded-2xl bg-white/70 backdrop-blur-sm border border-gray-200/50 hover:shadow-lg transition-all duration-300 hover:scale-105">
                 <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Shield className="h-6 w-6 text-green-600" />
                 </div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">MCP Integration</h3>
                 <p className="text-gray-600">
                   Seamlessly connect with AI tools through Model Context Protocol for enhanced functionality.
+                </p>
+              </div>
+
+              <div className="text-center p-6 rounded-2xl bg-white/70 backdrop-blur-sm border border-gray-200/50 hover:shadow-lg transition-all duration-300 hover:scale-105">
+                <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Users className="h-6 w-6 text-purple-600" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Community Driven</h3>
+                <p className="text-gray-600">
+                  Share and discover prompts from a growing community of AI enthusiasts.
                 </p>
               </div>
             </div>
