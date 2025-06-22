@@ -1,19 +1,56 @@
 import { NextResponse } from 'next/server';
-import { prompts } from '@/lib/prompts';
-import { workflows } from '@/lib/workflows';
+import { supabase } from '@/lib/supabase';
 import Fuse from 'fuse.js';
 
-const promptFuse = new Fuse(prompts, {
-  keys: ['title', 'description', 'tags'],
-  includeScore: true,
-  threshold: 0.4, 
-});
+// Define the prompt type for search
+interface SearchPrompt {
+  id: string;
+  title: string;
+  description: string;
+  content: string;
+  tags: string[];
+  likes: number;
+  model: string;
+}
 
-const workflowFuse = new Fuse(workflows, {
-  keys: ['name', 'description'],
-  includeScore: true,
-  threshold: 0.4,
-});
+// Initialize Fuse instance for prompt search
+let promptFuse: Fuse<SearchPrompt> | null = null;
+
+// Function to initialize prompt search
+async function initializePromptSearch() {
+  if (promptFuse) return; // Already initialized
+  
+  try {
+    const { data: prompts, error } = await supabase
+      .from('prompts')
+      .select('*')
+      .eq('is_public', true);
+    
+    if (error) {
+      console.error('Error fetching prompts for search:', error);
+      return;
+    }
+    
+    // Transform database prompts to match expected format
+    const transformedPrompts: SearchPrompt[] = (prompts || []).map(p => ({
+      id: p.id.toString(),
+      title: p.title,
+      description: p.content.substring(0, 100) + '...', // Use content as description
+      content: p.content,
+      tags: p.tags,
+      likes: p.likes || 0,
+      model: p.model
+    }));
+    
+    promptFuse = new Fuse(transformedPrompts, {
+      keys: ['title', 'description', 'tags'],
+      includeScore: true,
+      threshold: 0.4,
+    });
+  } catch (error) {
+    console.error('Error initializing prompt search:', error);
+  }
+}
 
 export async function GET() {
   console.log('GET request received');
@@ -25,6 +62,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    // Initialize prompt search if not already done
+    await initializePromptSearch();
+    
     const body = await request.json();
     console.log('Received request:', JSON.stringify(body, null, 2));
     
@@ -101,55 +141,38 @@ export async function POST(request: Request) {
               });
             }
 
-            // First, search for a matching workflow
-            const workflowResults = workflowFuse.search(query);
-
-            if (workflowResults.length > 0) {
-              const workflow = workflowResults[0].item;
-              const chainedPrompts = workflow.promptIds.map((id: string) => prompts.find((p: { id: string }) => p.id === id)).filter(Boolean);
-
-              return NextResponse.json({
-                jsonrpc: '2.0',
-                id,
-                result: {
-                  content: [{
-                    type: 'prompt_chain',
-                    chain: chainedPrompts
-                  }]
-                }
-              });
+            // Search for a single prompt from database
+            if (promptFuse) {
+              const promptResults = promptFuse.search(query);
+              
+              if (promptResults.length > 0) {
+                return NextResponse.json({
+                  jsonrpc: '2.0',
+                  id,
+                  result: {
+                    content: [
+                      {
+                        type: 'single_prompt',
+                        prompt: promptResults[0].item
+                      }
+                    ]
+                  }
+                });
+              }
             }
-
-            // If no workflow is found, search for a single prompt
-            const promptResults = promptFuse.search(query);
             
-            if (promptResults.length > 0) {
-              return NextResponse.json({
-                jsonrpc: '2.0',
-                id,
-                result: {
-                  content: [
-                    {
-                      type: 'single_prompt',
-                      prompt: promptResults[0].item
-                    }
-                  ]
-                }
-              });
-            } else {
-              return NextResponse.json({
-                jsonrpc: '2.0',
-                id,
-                result: {
-                  content: [
-                    {
-                      type: 'text',
-                      text: 'No matching prompt found'
-                    }
-                  ]
-                }
-              });
-            }
+            return NextResponse.json({
+              jsonrpc: '2.0',
+              id,
+              result: {
+                content: [
+                  {
+                    type: 'text',
+                    text: 'No matching prompt found'
+                  }
+                ]
+              }
+            });
           }
           break;
       }
@@ -157,7 +180,7 @@ export async function POST(request: Request) {
     
     // Fallback for simple JSON requests (for testing)
     const { query } = body;
-    if (query) {
+    if (query && promptFuse) {
       const results = promptFuse.search(query);
       if (results.length > 0) {
         return NextResponse.json(results[0].item);

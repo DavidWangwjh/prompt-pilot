@@ -1,6 +1,8 @@
 'use client';
 
 import { createContext, useContext, useState, ReactNode } from 'react';
+import { Session } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 
 // Define the Prompt type
 export interface Prompt {
@@ -9,68 +11,35 @@ export interface Prompt {
   content: string;
   tags: string[];
   likes: number;
-  comments: number;
   model: string;
+  is_public?: boolean;
 }
 
-// Initial dummy data for prompts
-const initialPrompts: Prompt[] = [
-  { 
-    id: 1, 
-    title: 'Creative Story Starter', 
-    content: 'You are a master storyteller. Create an engaging opening scene for a fantasy novel that immediately hooks the reader. The scene should introduce a compelling protagonist, establish the magical world, and create tension or mystery that makes the reader want to continue. Include vivid sensory details, atmospheric descriptions, and a hint of the larger conflict to come. Make the first paragraph unforgettable.', 
-    tags: ['writing', 'creative', 'fantasy', 'storytelling'], 
-    likes: 120, 
-    comments: 15, 
-    model: 'GPT-4' 
+const FAKE_USER_ID = 'f9df1fa1-1a38-494c-917e-ca3a3b80b75d';
+
+// Create a fake session object
+const fakeSession: Session = {
+  access_token: 'fake-access-token',
+  refresh_token: 'fake-refresh-token',
+  expires_in: 3600,
+  token_type: 'bearer',
+  user: {
+    id: FAKE_USER_ID,
+    app_metadata: { provider: 'email' },
+    user_metadata: {},
+    aud: 'authenticated',
+    created_at: new Date().toISOString(),
   },
-  { 
-    id: 2, 
-    title: 'JavaScript Code Explainer', 
-    content: 'Analyze the following JavaScript code and explain it in simple terms that a beginner programmer would understand. Break down each part of the code, explain what it does, why it\'s written that way, and provide examples of when you might use similar patterns. Also identify any potential issues or improvements that could be made to the code.', 
-    tags: ['coding', 'javascript', 'education', 'debugging'], 
-    likes: 256, 
-    comments: 42, 
-    model: 'GPT-4' 
-  },
-  { 
-    id: 3, 
-    title: 'Image Prompt', 
-    content: 'Create a photorealistic sci-fi concept art piece featuring a futuristic cityscape at sunset. The city should have towering glass and steel skyscrapers with holographic advertisements, flying vehicles weaving between buildings, and neon lights reflecting in puddles on the street. Include detailed atmospheric effects like lens flares, volumetric lighting, and a dramatic sky with storm clouds. The style should be cinematic and highly detailed, with a color palette of deep blues, purples, and warm oranges.', 
-    tags: ['art', 'sci-fi', 'concept-art'], 
-    likes: 512, 
-    comments: 89, 
-    model: 'GPT-4' 
-  },
-  { 
-    id: 4, 
-    title: 'Marketing Copy Generator', 
-    content: 'Write compelling marketing copy for a new tech gadget that emphasizes its unique features and benefits. Create multiple versions: a short tagline, a product description for a website, and a social media post. Focus on the emotional benefits and pain points it solves. Use persuasive language, include a call-to-action, and make it sound innovative and exciting without being overly technical.', 
-    tags: ['marketing', 'copywriting', 'business', 'persuasion'], 
-    likes: 98, 
-    comments: 23, 
-    model: 'Claude' 
-  },
-  { 
-    id: 5, 
-    title: 'Recipe Creator', 
-    content: 'Based on the following ingredients I have available, create a unique and delicious recipe. Consider flavor combinations, cooking techniques, and presentation. Provide detailed step-by-step instructions, cooking times, and tips for best results. Also suggest any additional ingredients that would enhance the dish, and include nutritional information and serving suggestions.', 
-    tags: ['food', 'creative', 'cooking', 'nutrition'], 
-    likes: 310, 
-    comments: 55, 
-    model: 'Gemini' 
-  }
-];
+};
 
 type DashboardView = 'Vault' | 'Explore' | 'Playground' | 'MCP';
 
 interface DashboardContextType {
+  session: Session | null;
   activeView: DashboardView;
   setActiveView: (view: DashboardView) => void;
-  prompts: Prompt[];
-  addPrompt: (promptData: Omit<Prompt, 'id' | 'likes' | 'comments'>) => void;
-  updatePrompt: (updatedPrompt: Prompt) => void;
-  savePromptFromExplore: (prompt: Prompt) => void;
+  // We'll keep these for now, but they won't do much
+  savePromptFromExplore: (prompt: Omit<Prompt, 'id'>) => void;
   toggleLike: (promptId: number) => void;
   likedPrompts: Set<number>;
   globalSearchTerm: string;
@@ -81,46 +50,47 @@ const DashboardContext = createContext<DashboardContextType | undefined>(undefin
 
 export function DashboardProvider({ children }: { children: ReactNode }) {
   const [activeView, setActiveView] = useState<DashboardView>('Vault');
-  const [prompts, setPrompts] = useState<Prompt[]>(initialPrompts);
   const [likedPrompts, setLikedPrompts] = useState<Set<number>>(new Set());
   const [globalSearchTerm, setGlobalSearchTerm] = useState<string>('');
+  
+  const savePromptFromExplore = async (promptToSave: Omit<Prompt, 'id'>) => {
+    try {
+      console.log('Attempting to save prompt:', promptToSave);
+      console.log('Using user ID:', FAKE_USER_ID);
+      
+      const { data, error } = await supabase
+        .from('prompts')
+        .insert([{ 
+          ...promptToSave, 
+          is_public: false,
+          user_id: FAKE_USER_ID 
+        }])
+        .select()
+        .single();
 
-  const addPrompt = (promptData: Omit<Prompt, 'id' | 'likes' | 'comments'>) => {
-    const newPrompt: Prompt = {
-      id: Date.now(),
-      ...promptData,
-      likes: 0,
-      comments: 0
-    };
-    setPrompts(prev => [newPrompt, ...prev]);
-  };
+      console.log('Supabase response - data:', data);
+      console.log('Supabase response - error:', error);
 
-  const updatePrompt = (updatedPrompt: Prompt) => {
-    setPrompts(prev => prev.map(p => p.id === updatedPrompt.id ? updatedPrompt : p));
-  };
-
-  const savePromptFromExplore = (promptToSave: Prompt) => {
-    const newPrompt = {
-      ...promptToSave,
-      id: Date.now(),
-      likes: 0,
-      comments: 0
-    };
-    setPrompts(prev => [newPrompt, ...prev]);
-  };
-
-  const toggleLike = (promptId: number) => {
-    setPrompts(prev => prev.map(prompt => {
-      if (prompt.id === promptId) {
-        const isLiked = likedPrompts.has(promptId);
-        return {
-          ...prompt,
-          likes: isLiked ? prompt.likes - 1 : prompt.likes + 1
-        };
+      if (error) {
+        console.error('Error saving prompt from explore:', error);
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        throw new Error(`Failed to save prompt: ${error.message}`);
       }
-      return prompt;
-    }));
+      
+      console.log('Successfully saved prompt:', data);
+      return data;
+    } catch (error) {
+      console.error('Error in savePromptFromExplore:', error);
+      throw error;
+    }
+  };
 
+  const toggleLike = async (promptId: number) => {
     setLikedPrompts(prev => {
       const newSet = new Set(prev);
       if (newSet.has(promptId)) {
@@ -130,15 +100,41 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       }
       return newSet;
     });
+
+    // Fetch current likes
+    const { data, error } = await supabase
+      .from('prompts')
+      .select('likes')
+      .eq('id', promptId)
+      .single();
+
+    if (error) {
+      console.error('Failed to fetch current likes:', error);
+      return;
+    }
+
+    let newLikes = (data?.likes || 0);
+    if (likedPrompts.has(promptId)) {
+      newLikes = Math.max(0, newLikes - 1);
+    } else {
+      newLikes = newLikes + 1;
+    }
+
+    const { error: updateError } = await supabase
+      .from('prompts')
+      .update({ likes: newLikes })
+      .eq('id', promptId);
+
+    if (updateError) {
+      console.error('Failed to update likes:', updateError);
+    }
   };
 
   return (
     <DashboardContext.Provider value={{ 
+      session: fakeSession, // Always provide the fake session
       activeView, 
       setActiveView, 
-      prompts, 
-      addPrompt, 
-      updatePrompt, 
       savePromptFromExplore, 
       toggleLike, 
       likedPrompts,

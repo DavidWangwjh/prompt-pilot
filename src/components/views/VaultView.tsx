@@ -1,42 +1,87 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { LayoutGrid, List, Plus, X } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { LayoutGrid, List, Plus, X, Loader2 } from 'lucide-react';
 import PromptCard from '@/components/PromptCard';
 import { clsx } from 'clsx';
 import { useDashboard, Prompt } from '@/context/DashboardContext';
+import { supabase } from '@/lib/supabase';
 
 const availableModels = ['GPT-4', 'GPT-3.5', 'Claude', 'Gemini', 'DALL-E'];
 
 export default function VaultView() {
-  const { prompts, addPrompt, updatePrompt, globalSearchTerm } = useDashboard();
+  const { globalSearchTerm, session, likedPrompts } = useDashboard();
+  const [prompts, setPrompts] = useState<Prompt[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [showNewPromptModal, setShowNewPromptModal] = useState(false);
   const [promptToEdit, setPromptToEdit] = useState<Prompt | null>(null);
+
+  useEffect(() => {
+    const fetchPrompts = async () => {
+      if (!session) {
+        setPrompts([]);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+      
+      const { data, error } = await supabase
+          .from('prompts')
+          .select('*')
+          .eq('user_id', session.user.id);
+
+      if (error) {
+          console.error('Error fetching vault prompts:', error);
+          setError('Failed to load your prompts. Please try again later.');
+      } else {
+          const fetchedPrompts: Prompt[] = (data || []).map(p => ({
+              ...p,
+              likes: p.likes || 0,
+              is_public: p.is_public || false,
+          }));
+          setPrompts(fetchedPrompts);
+      }
+      setLoading(false);
+    };
+
+    fetchPrompts();
+  }, [session]);
 
   // New prompt form state
   const [newPrompt, setNewPrompt] = useState({
     title: '',
     content: '',
     tags: [] as string[],
-    model: 'GPT-4'
+    model: 'GPT-4',
+    is_public: false
   });
   const [tagInput, setTagInput] = useState('');
+
+  // Create dynamic prompts that include like state
+  const dynamicPrompts = useMemo(() => {
+    return prompts.map(prompt => ({
+      ...prompt,
+      likes: prompt.likes + (likedPrompts.has(prompt.id) ? 1 : 0),
+    }));
+  }, [prompts, likedPrompts]);
 
   // Filter prompts based on global search term
   const filteredPrompts = useMemo(() => {
     if (!globalSearchTerm.trim()) {
-      return prompts;
+      return dynamicPrompts;
     }
-    
     const searchLower = globalSearchTerm.toLowerCase();
-    return prompts.filter(prompt => 
+    return dynamicPrompts.filter(prompt => 
       prompt.title.toLowerCase().includes(searchLower) ||
       prompt.content.toLowerCase().includes(searchLower) ||
       prompt.tags.some(tag => tag.toLowerCase().includes(searchLower)) ||
       prompt.model.toLowerCase().includes(searchLower)
     );
-  }, [prompts, globalSearchTerm]);
+  }, [dynamicPrompts, globalSearchTerm]);
 
   const openForCreate = () => {
     setPromptToEdit(null);
@@ -44,7 +89,8 @@ export default function VaultView() {
       title: '',
       content: '',
       tags: [],
-      model: 'GPT-4'
+      model: 'GPT-4',
+      is_public: false
     });
     setShowNewPromptModal(true);
   };
@@ -55,32 +101,88 @@ export default function VaultView() {
       title: prompt.title,
       content: prompt.content,
       tags: prompt.tags,
-      model: prompt.model
+      model: prompt.model,
+      is_public: prompt.is_public || false
     });
     setShowNewPromptModal(true);
   };
 
-  const handleSavePrompt = () => {
+  const handleSavePrompt = async () => {
     if (!newPrompt.title.trim() || !newPrompt.content.trim()) {
       return;
     }
 
+    if (!session?.user) {
+      setError("You must be logged in to create a prompt.");
+      return;
+    }
+
+    setLoading(true);
+    const updatedPrompts = [...prompts];
+
     if (promptToEdit) {
       // Update existing prompt
-      updatePrompt({
-        ...promptToEdit,
-        ...newPrompt
-      });
+      const { data, error } = await supabase
+        .from('prompts')
+        .update({ ...newPrompt })
+        .eq('id', promptToEdit.id)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error updating prompt:', error);
+        setError('Failed to update prompt.');
+      } else if (data) {
+        const promptIndex = prompts.findIndex(p => p.id === data.id);
+        if(promptIndex !== -1) {
+          updatedPrompts[promptIndex] = { ...data, likes: data.likes || 0, is_public: data.is_public || false };
+        }
+      }
+
     } else {
       // Create new prompt
-      addPrompt(newPrompt);
+      const { data, error } = await supabase
+        .from('prompts')
+        .insert([{ ...newPrompt, user_id: session.user.id }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating prompt:', error);
+        setError('Failed to create prompt.');
+      } else if (data) {
+        updatedPrompts.push({ ...data, likes: data.likes || 0, is_public: data.is_public || false });
+      }
     }
     
+    setPrompts(updatedPrompts);
     setShowNewPromptModal(false);
+    setLoading(false);
+  };
+
+  const handleDeletePrompt = async () => {
+    if (!promptToEdit) return;
+
+    const { error } = await supabase
+      .from('prompts')
+      .delete()
+      .eq('id', promptToEdit.id);
+    
+    if (error) {
+      console.error('Error deleting prompt:', error);
+      setError('Failed to delete prompt.');
+    } else {
+      setPrompts(prompts.filter(p => p.id !== promptToEdit.id));
+      setShowNewPromptModal(false);
+    }
   };
 
   const addTag = () => {
     if (tagInput.trim() && !newPrompt.tags.includes(tagInput.trim())) {
+      if (newPrompt.tags.length >= 9) {
+        // Could add a toast notification here if desired
+        return;
+      }
       setNewPrompt(prev => ({
         ...prev,
         tags: [...prev.tags, tagInput.trim()]
@@ -148,11 +250,34 @@ export default function VaultView() {
     // Remove duplicates and limit to 5 tags
     const uniqueTags = [...new Set(generatedTags)].slice(0, 5);
 
+    // Ensure we don't exceed 9 tags total
+    const currentTags = newPrompt.tags;
+    const availableSlots = 9 - currentTags.length;
+    const tagsToAdd = uniqueTags.slice(0, availableSlots);
+
     setNewPrompt(prev => ({
       ...prev,
-      tags: uniqueTags
+      tags: [...prev.tags, ...tagsToAdd]
     }));
   };
+
+  if (loading) {
+    return (
+        <div className="flex justify-center items-center h-full p-8">
+            <Loader2 className="animate-spin text-blue-600" size={48} />
+        </div>
+    );
+  }
+
+  if (error) {
+    return (
+        <div className="flex flex-col justify-center items-center h-full text-center p-8">
+            <X className="text-red-500 mb-4" size={48} />
+            <h3 className="text-xl font-semibold text-gray-800">An Error Occurred</h3>
+            <p className="text-gray-500 mt-2">{error}</p>
+        </div>
+    );
+  }
 
   return (
     <>
@@ -234,10 +359,44 @@ export default function VaultView() {
                 </select>
               </div>
 
+              {/* Public/Private Toggle */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Visibility
+                </label>
+                <div className="flex items-center space-x-3">
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      name="visibility"
+                      checked={!newPrompt.is_public}
+                      onChange={() => setNewPrompt(prev => ({ ...prev, is_public: false }))}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Private</span>
+                  </label>
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="radio"
+                      name="visibility"
+                      checked={newPrompt.is_public}
+                      onChange={() => setNewPrompt(prev => ({ ...prev, is_public: true }))}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">Public</span>
+                  </label>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  {newPrompt.is_public 
+                    ? "Public prompts will be visible to everyone in the Explore section." 
+                    : "Private prompts are only visible to you in your vault."}
+                </p>
+              </div>
+
               {/* Tags */}
               <div>
                 <label htmlFor="tags" className="block text-sm font-medium text-gray-700 mb-2">
-                  Tags
+                  Tags {newPrompt.tags.length >= 9 && <span className="text-red-500">(Maximum 9 tags reached)</span>}
                 </label>
                 <div className="flex flex-wrap gap-2 mb-2">
                   {newPrompt.tags.map(tag => (
@@ -261,12 +420,14 @@ export default function VaultView() {
                     value={tagInput}
                     onChange={(e) => setTagInput(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                    placeholder="Add a tag..."
+                    disabled={newPrompt.tags.length >= 9}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    placeholder={newPrompt.tags.length >= 9 ? "Maximum tags reached" : "Add a tag..."}
                   />
                   <button
                     onClick={addTag}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors duration-200"
+                    disabled={newPrompt.tags.length >= 9 || !tagInput.trim()}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors duration-200 disabled:bg-gray-300 disabled:cursor-not-allowed"
                   >
                     Add
                   </button>
@@ -289,27 +450,39 @@ export default function VaultView() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
-              <button
-                onClick={() => setShowNewPromptModal(false)}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleOptimize}
-                disabled={!newPrompt.content.trim()}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200"
-              >
-                Optimize
-              </button>
-              <button
-                onClick={handleSavePrompt}
-                disabled={!newPrompt.title.trim() || !newPrompt.content.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200"
-              >
-                {promptToEdit ? 'Update' : 'Create'}
-              </button>
+            <div className="flex items-center justify-between gap-3 p-6 border-t border-gray-200">
+              <div>
+                {promptToEdit && (
+                    <button
+                        onClick={handleDeletePrompt}
+                        className="px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors duration-200"
+                    >
+                        Delete
+                    </button>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowNewPromptModal(false)}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleOptimize}
+                  disabled={!newPrompt.content.trim()}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200"
+                >
+                  Optimize
+                </button>
+                <button
+                  onClick={handleSavePrompt}
+                  disabled={!newPrompt.title.trim() || !newPrompt.content.trim()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200"
+                >
+                  {promptToEdit ? 'Update' : 'Create'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { ThumbsUp, Save, Copy, X, Edit, Check } from 'lucide-react';
+import { ThumbsUp, Save, Copy, X, Edit, Check, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { useDashboard } from '@/context/DashboardContext';
 
@@ -13,9 +13,10 @@ interface PromptCardProps {
   source: 'explore' | 'vault';
   onSave?: () => void;
   onEdit?: () => void;
+  isSaving?: boolean;
 }
 
-export default function PromptCard({ id, title, content, tags, likes, model, view, source, onSave, onEdit }: PromptCardProps) {
+export default function PromptCard({ id, title, content, tags, likes, model, view, source, onSave, onEdit, isSaving = false }: PromptCardProps) {
   const { toggleLike, likedPrompts } = useDashboard();
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -68,14 +69,21 @@ export default function PromptCard({ id, title, content, tags, likes, model, vie
       </div>
       {source === 'explore' && onSave && (
         <button 
-          className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-200 btn-hover"
+          className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-200 btn-hover disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={(e) => {
             e.stopPropagation();
-            handleSave();
+            if (!isSaving) {
+              handleSave();
+            }
           }}
+          disabled={isSaving}
         >
-          <Save size={16} className="hover:scale-110 transition-transform duration-200" />
-          <span>Save</span>
+          {isSaving ? (
+            <Loader2 size={16} className="animate-spin" />
+          ) : (
+            <Save size={16} className="hover:scale-110 transition-transform duration-200" />
+          )}
+          <span>{isSaving ? 'Saving...' : 'Save'}</span>
         </button>
       )}
     </div>
@@ -94,7 +102,7 @@ export default function PromptCard({ id, title, content, tags, likes, model, vie
             <p className="mt-1 text-sm text-gray-600 line-clamp-2">{content}</p>
           </div>
           <div className="hidden md:flex flex-wrap gap-2 mx-4" style={{ flexBasis: '250px' }}>
-            {tags.slice(0, 3).map((tag) => (
+            {tags.slice(0, 9).map((tag) => (
               <span key={tag} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full hover:bg-blue-200 transition-colors duration-200">
                 {tag}
               </span>
@@ -119,14 +127,21 @@ export default function PromptCard({ id, title, content, tags, likes, model, vie
             </button>
             {source === 'explore' && onSave && (
               <button 
-                className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-200 btn-hover"
+                className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-200 btn-hover disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleSave();
+                  if (!isSaving) {
+                    handleSave();
+                  }
                 }}
+                disabled={isSaving}
               >
-                <Save size={16} className="hover:scale-110 transition-transform duration-200" />
-                <span>Save</span>
+                {isSaving ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Save size={16} className="hover:scale-110 transition-transform duration-200" />
+                )}
+                <span>{isSaving ? 'Saving...' : 'Save'}</span>
               </button>
             )}
           </div>
@@ -241,20 +256,24 @@ export default function PromptCard({ id, title, content, tags, likes, model, vie
   return (
     <>
       <div 
-        className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200 card-hover group cursor-pointer flex flex-col h-full"
+        className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200 card-hover group cursor-pointer flex flex-col h-80"
         onClick={() => setShowDetailModal(true)}
       >
-        <div className="p-4 flex-grow">
+        <div className="p-4 flex flex-col flex-grow">
           <div className="flex justify-between items-start">
             <div className="flex-1">
               <h3 className="font-bold text-lg text-gray-900 group-hover:text-blue-600 transition-colors duration-200">{title}</h3>
               <p className="text-sm text-gray-500 mt-1">Model: {model}</p>
             </div>
           </div>
-          <p className="mt-3 text-sm text-gray-600 line-clamp-3">{content}</p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {tags.map((tag) => (
-              <span key={tag} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full hover:bg-blue-200 transition-colors duration-200 cursor-pointer">
+          <div className="mt-3 flex-grow overflow-hidden">
+            <p className="text-sm text-gray-600 line-clamp-4">
+              {content}
+            </p>
+          </div>
+          <div className="pt-4 flex flex-wrap gap-2">
+            {tags.slice(0, 9).map((tag) => (
+              <span key={tag} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full hover:bg-blue-200 transition-colors duration-200">
                 {tag}
               </span>
             ))}

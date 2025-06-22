@@ -1,6 +1,6 @@
 "use client";
 
-import { MagnifyingGlassIcon, BellIcon } from "@heroicons/react/24/outline";
+import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { UserCircleIcon } from "@heroicons/react/24/solid";
 import { useState, useEffect } from "react";
 import { useDashboard } from "@/context/DashboardContext";
@@ -38,17 +38,6 @@ export default function Navbar() {
 
       {/* Right side */}
       <div className="flex items-center space-x-2 sm:space-x-4">
-        {/* Notifications */}
-        <button
-          type="button"
-          className="relative rounded-full bg-white p-2 text-gray-400 hover:text-gray-500 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 btn-hover"
-        >
-          <span className="sr-only">View notifications</span>
-          <BellIcon className="h-6 w-6" aria-hidden="true" />
-          {/* Notification badge */}
-          <span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full"></span>
-        </button>
-
         {/* Profile dropdown */}
         <div className="relative">
           <button

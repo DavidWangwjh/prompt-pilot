@@ -1,151 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import PromptCard from '@/components/PromptCard';
-import { Search, Filter, X, ChevronDown } from 'lucide-react';
-import { useDashboard } from '@/context/DashboardContext';
-
-const publicPrompts = [
-    { 
-      id: 101, 
-      title: 'Epic Landscape Generator', 
-      content: 'Create a breathtaking fantasy landscape that combines multiple biomes in a single scene. Include a majestic mountain range with snow-capped peaks, a lush forest valley with a winding river, ancient ruins partially covered in vegetation, and a mystical floating island with cascading waterfalls. The lighting should be dramatic with golden hour rays breaking through storm clouds, creating atmospheric perspective and depth. Include fantastical elements like glowing crystals, ethereal mist, and wildlife that fits the environment.', 
-      tags: ['art', 'landscape', 'fantasy'], 
-      likes: 1800, 
-      comments: 250, 
-      model: 'GPT-4' 
-    },
-    { 
-      id: 102, 
-      title: 'Python Code Debugger', 
-      content: 'You are an expert Python developer and debugging specialist. Analyze the provided Python code and identify all potential issues, including syntax errors, logical flaws, performance problems, and security vulnerabilities. For each issue found, provide a detailed explanation of why it occurs, the potential impact, and a corrected version of the code. Also suggest improvements for code readability, maintainability, and scalability.', 
-      tags: ['coding', 'python', 'debugging', 'best-practices'], 
-      likes: 2300, 
-      comments: 450, 
-      model: 'GPT-4' 
-    },
-    { 
-      id: 103, 
-      title: 'Content Summarizer', 
-      content: 'Summarize the following content in multiple formats: a one-sentence executive summary, a bullet-point overview of key points, and a detailed analysis with main themes and supporting evidence. Identify the target audience, tone, and purpose of the original content. Highlight any important quotes, statistics, or data points. Provide context for why this information matters and suggest related topics for further exploration.', 
-      tags: ['productivity', 'writing', 'summary', 'analysis'], 
-      likes: 950, 
-      comments: 120, 
-      model: 'Claude' 
-    },
-    { 
-      id: 104, 
-      title: 'Character Backstory Creator', 
-      content: 'Develop a rich and detailed backstory for a fictional character that includes their origin story, formative experiences, relationships, motivations, fears, and aspirations. Create a timeline of key events that shaped their personality and current situation. Include specific details about their cultural background, education, career path, and personal struggles. Develop their voice, mannerisms, and unique characteristics that make them memorable and relatable to readers.', 
-      tags: ['writing', 'creative', 'rpg', 'character-development'], 
-      likes: 780, 
-      comments: 90, 
-      model: 'Claude' 
-    },
-    { 
-      id: 105, 
-      title: 'SQL Query Builder', 
-      content: 'Based on the database schema and requirements provided, construct optimized SQL queries for data retrieval, analysis, and reporting. Include multiple query variations for different use cases: simple lookups, complex joins, aggregations, and data transformations. Consider performance implications, indexing strategies, and query optimization techniques. Provide explanations for each query structure and suggest alternative approaches for different database systems.', 
-      tags: ['coding', 'sql', 'database', 'analytics'], 
-      likes: 1500, 
-      comments: 310, 
-      model: 'GPT-4' 
-    },
-    { 
-      id: 106, 
-      title: 'Fitness Plan Generator', 
-      content: 'Design a comprehensive fitness plan tailored to specific goals, current fitness level, available equipment, and time constraints. Include detailed workout routines for different days, progressive overload principles, rest and recovery strategies, and nutrition guidelines. Consider individual preferences, limitations, and lifestyle factors. Provide modifications for different skill levels and alternative exercises for each movement pattern.', 
-      tags: ['health', 'fitness', 'planning', 'wellness'], 
-      likes: 600, 
-      comments: 75, 
-      model: 'Gemini' 
-    },
-    { 
-      id: 107, 
-      title: 'Product Launch Strategy', 
-      content: 'Develop a comprehensive product launch strategy that covers pre-launch preparation, launch execution, and post-launch optimization. Include market research, competitive analysis, target audience identification, messaging strategy, channel selection, timeline planning, and success metrics. Consider different launch scenarios and provide contingency plans. Include specific tactics for generating buzz, managing expectations, and handling potential challenges.', 
-      tags: ['business', 'marketing', 'strategy', 'product-management'], 
-      likes: 890, 
-      comments: 134, 
-      model: 'GPT-4' 
-    },
-    { 
-      id: 108, 
-      title: 'Creative Writing Workshop', 
-      content: 'Lead a creative writing workshop session focused on developing compelling narratives. Include writing exercises, prompts, and techniques for character development, plot structure, dialogue, and descriptive writing. Provide feedback frameworks and revision strategies. Cover different genres and writing styles, encouraging participants to experiment with voice and perspective. Include examples from literature and practical tips for overcoming writer\'s block.', 
-      tags: ['writing', 'education', 'creative', 'workshop'], 
-      likes: 420, 
-      comments: 67, 
-      model: 'Claude' 
-    },
-    { 
-      id: 109, 
-      title: 'Data Visualization Designer', 
-      content: 'Create compelling data visualizations that effectively communicate complex information to different audiences. Choose appropriate chart types, color schemes, and layout strategies for various data types and presentation contexts. Consider accessibility, mobile responsiveness, and interactive elements. Provide guidelines for storytelling with data, including narrative structure, key insights highlighting, and call-to-action integration.', 
-      tags: ['data-science', 'visualization', 'design', 'analytics'], 
-      likes: 720, 
-      comments: 98, 
-      model: 'GPT-4' 
-    },
-    { 
-      id: 110, 
-      title: 'Social Media Campaign', 
-      content: 'Design a multi-platform social media campaign that builds brand awareness and drives engagement. Include content themes, posting schedules, hashtag strategies, and community management guidelines. Consider platform-specific best practices, audience behavior patterns, and trending topics. Provide crisis management protocols and performance tracking methods. Include influencer collaboration strategies and user-generated content campaigns.', 
-      tags: ['marketing', 'social-media', 'campaign', 'engagement'], 
-      likes: 1100, 
-      comments: 156, 
-      model: 'Claude' 
-    },
-    { 
-      id: 111, 
-      title: 'Technical Documentation Writer', 
-      content: 'Write comprehensive technical documentation that serves multiple audiences: developers, end users, and system administrators. Include installation guides, API references, troubleshooting sections, and best practices. Use clear, concise language with appropriate technical depth for each audience. Include code examples, screenshots, diagrams, and step-by-step procedures. Consider different learning styles and provide both quick-start guides and detailed reference materials.', 
-      tags: ['writing', 'technical', 'documentation', 'education'], 
-      likes: 380, 
-      comments: 52, 
-      model: 'GPT-4' 
-    },
-    { 
-      id: 112, 
-      title: 'UX Research Framework', 
-      content: 'Develop a comprehensive UX research framework for understanding user needs, behaviors, and pain points. Include research methodologies, participant recruitment strategies, data collection methods, and analysis techniques. Cover both qualitative and quantitative approaches, from user interviews and surveys to usability testing and analytics. Provide templates for research plans, consent forms, and reporting structures.', 
-      tags: ['ux', 'research', 'design', 'user-experience'], 
-      likes: 650, 
-      comments: 89, 
-      model: 'Claude' 
-    },
-    { 
-      id: 113, 
-      title: 'Financial Analysis Report', 
-      content: 'Conduct a thorough financial analysis of the provided data, including profitability analysis, cash flow assessment, risk evaluation, and growth projections. Include ratio analysis, trend identification, and benchmarking against industry standards. Provide actionable insights and recommendations for financial optimization. Consider different scenarios and their potential impacts on financial performance.', 
-      tags: ['finance', 'analysis', 'business', 'reporting'], 
-      likes: 540, 
-      comments: 73, 
-      model: 'GPT-4' 
-    },
-    { 
-      id: 114, 
-      title: 'Event Planning Coordinator', 
-      content: 'Plan a comprehensive event from concept to execution, including venue selection, vendor management, timeline development, and risk mitigation strategies. Consider budget constraints, attendee experience, and logistical requirements. Include marketing and promotion strategies, registration systems, and post-event follow-up procedures. Provide contingency plans for common event challenges and success metrics for evaluation.', 
-      tags: ['planning', 'events', 'coordination', 'management'], 
-      likes: 470, 
-      comments: 61, 
-      model: 'Claude' 
-    },
-    { 
-      id: 115, 
-      title: 'Machine Learning Model Trainer', 
-      content: 'Guide the development and training of a machine learning model, including data preparation, feature engineering, model selection, and evaluation strategies. Cover different algorithms, hyperparameter tuning, and validation techniques. Include best practices for avoiding overfitting, handling imbalanced data, and ensuring model interpretability. Provide guidelines for model deployment, monitoring, and continuous improvement.', 
-      tags: ['machine-learning', 'data-science', 'ai', 'analytics'], 
-      likes: 820, 
-      comments: 112, 
-      model: 'GPT-4' 
-    }
-];
-
-// sort tags alphabetically
-const allTags = [...new Set(publicPrompts.flatMap(p => p.tags))].sort();
-const allModels = [...new Set(publicPrompts.map(p => p.model))];
+import { Search, Filter, X, ChevronDown, Loader2 } from 'lucide-react';
+import { useDashboard, Prompt } from '@/context/DashboardContext';
+import { supabase } from '@/lib/supabase';
 
 const FilterSection = ({ title, children }: { title: string, children: React.ReactNode }) => (
     <div className="py-4 border-b border-gray-100 last:border-b-0">
@@ -173,19 +32,58 @@ const FilterCheckbox = ({ id, label, checked, onChange }: { id: string, label: s
 
 export default function ExploreView() {
     const { savePromptFromExplore, likedPrompts, globalSearchTerm } = useDashboard();
+    const [prompts, setPrompts] = useState<Prompt[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [selectedModels, setSelectedModels] = useState<string[]>([]);
     const [sortBy, setSortBy] = useState('newest');
     const [showFilters, setShowFilters] = useState(false);
     const [tagsToShow, setTagsToShow] = useState(10);
+    const [savingPrompt, setSavingPrompt] = useState<number | null>(null);
 
+    useEffect(() => {
+        const fetchPrompts = async () => {
+            setLoading(true);
+            setError(null);
+            
+            const { data, error } = await supabase
+                .from('prompts')
+                .select('*')
+                .eq('is_public', true);
+
+            if (error) {
+                console.error('Error fetching prompts:', error);
+                setError('Failed to load prompts. Please try again later.');
+            } else {
+                const fetchedPrompts: Prompt[] = (data || []).map(p => ({
+                    ...p,
+                    likes: p.likes || 0,
+                    is_public: p.is_public || false,
+                }));
+                setPrompts(fetchedPrompts);
+            }
+            setLoading(false);
+        };
+
+        fetchPrompts();
+    }, []);
+
+    const allTags = useMemo(() => {
+        return [...new Set(prompts.flatMap(p => p.tags))].sort();
+    }, [prompts]);
+
+    const allModels = useMemo(() => {
+        return [...new Set(prompts.map(p => p.model))];
+    }, [prompts]);
+    
     // Create dynamic prompts that include like state
     const dynamicPrompts = useMemo(() => {
-        return publicPrompts.map(prompt => ({
+        return prompts.map(prompt => ({
             ...prompt,
-            likes: prompt.likes + (likedPrompts.has(prompt.id) ? 1 : 0)
+            likes: prompt.likes + (likedPrompts.has(prompt.id) ? 1 : 0),
         }));
-    }, [likedPrompts]);
+    }, [prompts, likedPrompts]);
 
     const handleTagChange = (tag: string) => {
         setSelectedTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
@@ -244,8 +142,49 @@ export default function ExploreView() {
         return prompts;
     }, [dynamicPrompts, globalSearchTerm, selectedTags, selectedModels, sortBy]);
     
+    const handleSavePrompt = async (prompt: Prompt) => {
+        setSavingPrompt(prompt.id);
+        try {
+            // Create a new object without the id field
+            const promptWithoutId = {
+                title: prompt.title,
+                content: prompt.content,
+                tags: prompt.tags,
+                likes: prompt.likes,
+                model: prompt.model,
+                is_public: prompt.is_public
+            };
+            await savePromptFromExplore(promptWithoutId);
+            // Could add a toast notification here for success
+            console.log('Prompt saved successfully!');
+        } catch (error) {
+            console.error('Failed to save prompt:', error);
+            // Could add a toast notification here for error
+        } finally {
+            setSavingPrompt(null);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center h-full">
+                <Loader2 className="animate-spin text-blue-600" size={48} />
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="flex flex-col justify-center items-center h-full text-center">
+                <X className="text-red-500 mb-4" size={48} />
+                <h3 className="text-xl font-semibold text-gray-800">An Error Occurred</h3>
+                <p className="text-gray-500 mt-2">{error}</p>
+            </div>
+        );
+    }
+
     return (
-        <div className="flex flex-col lg:flex-row gap-6 h-full">
+        <div className="flex flex-col lg:flex-row gap-6 p-4 sm:p-6">
             {/* Mobile Filter Toggle */}
             <div className="lg:hidden flex items-center justify-between">
                 <button
@@ -271,7 +210,7 @@ export default function ExploreView() {
             </div>
 
             {/* Filter Sidebar */}
-            <aside className={`lg:w-64 lg:h-full lg:shrink-0 transition-all duration-300 ${
+            <aside className={`lg:w-64 lg:shrink-0 transition-all duration-300 ${
                 showFilters ? 'block' : 'hidden lg:block'
             }`}>
                 <div className="lg:sticky lg:top-6 bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
@@ -284,35 +223,35 @@ export default function ExploreView() {
                             <X size={20} />
                         </button>
                     </div>
-                    
+
                     <div className="hidden lg:block">
                         <h2 className="text-xl font-bold text-gray-900 mb-4">Filters</h2>
                     </div>
 
                     <div className="space-y-4">
-                        <FilterSection title="Sort By">
+                    <FilterSection title="Sort By">
                             <div className="space-y-2">
-                                <div className="flex items-center">
+                        <div className="flex items-center">
                                     <input id="sort-newest" type="radio" name="sort" checked={sortBy === 'newest'} onChange={() => setSortBy('newest')} className="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500 transition-all duration-200" />
                                     <label htmlFor="sort-newest" className="ml-3 text-sm text-gray-600 cursor-pointer hover:text-gray-900 transition-colors duration-200">Newest</label>
-                                </div>
-                                <div className="flex items-center">
+                        </div>
+                        <div className="flex items-center">
                                     <input id="sort-most-liked" type="radio" name="sort" checked={sortBy === 'most-liked'} onChange={() => setSortBy('most-liked')} className="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500 transition-all duration-200" />
                                     <label htmlFor="sort-most-liked" className="ml-3 text-sm text-gray-600 cursor-pointer hover:text-gray-900 transition-colors duration-200">Most Liked</label>
-                                </div>
-                            </div>
-                        </FilterSection>
+                        </div>
+                        </div>
+                    </FilterSection>
 
-                        <FilterSection title="Models">
-                            {allModels.map(model => (
-                                <FilterCheckbox key={model} id={`model-${model}`} label={model} checked={selectedModels.includes(model)} onChange={() => handleModelChange(model)} />
-                            ))}
-                        </FilterSection>
+                    <FilterSection title="Models">
+                        {allModels.map(model => (
+                            <FilterCheckbox key={model} id={`model-${model}`} label={model} checked={selectedModels.includes(model)} onChange={() => handleModelChange(model)} />
+                        ))}
+                    </FilterSection>
 
-                        <FilterSection title="Tags">
-                            {allTags.slice(0, tagsToShow).map(tag => (
-                                <FilterCheckbox key={tag} id={`tag-${tag}`} label={tag} checked={selectedTags.includes(tag)} onChange={() => handleTagChange(tag)} />
-                            ))}
+                    <FilterSection title="Tags">
+                            {allTags.slice(0, tagsToShow).map((tag: string) => (
+                            <FilterCheckbox key={tag} id={`tag-${tag}`} label={tag} checked={selectedTags.includes(tag)} onChange={() => handleTagChange(tag)} />
+                        ))}
                             {tagsToShow < allTags.length && (
                                 <button
                                     onClick={loadMoreTags}
@@ -322,7 +261,7 @@ export default function ExploreView() {
                                     <ChevronDown size={16} />
                                 </button>
                             )}
-                        </FilterSection>
+                    </FilterSection>
                     </div>
                 </div>
             </aside>
@@ -337,7 +276,8 @@ export default function ExploreView() {
                                     {...prompt}
                                     source="explore"
                                     view="grid" 
-                                    onSave={() => savePromptFromExplore(prompt)}
+                                    onSave={() => handleSavePrompt(prompt)}
+                                    isSaving={savingPrompt === prompt.id}
                                 />
                             </div>
                         ))
