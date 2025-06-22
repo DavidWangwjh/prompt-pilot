@@ -3,6 +3,7 @@ import { prompts } from '@/lib/prompts';
 import { workflows } from '@/lib/workflows';
 import Fuse from 'fuse.js';
 
+// Create a combined search index that includes both static prompts and dynamic prompts
 const promptFuse = new Fuse(prompts, {
   keys: ['title', 'description', 'tags'],
   includeScore: true,
@@ -78,6 +79,20 @@ export async function POST(request: Request) {
                     },
                     required: ['query']
                   }
+                },
+                {
+                  name: 'get_prompt_workflow',
+                  description: 'Get a workflow of related prompts for complex tasks',
+                  inputSchema: {
+                    type: 'object',
+                    properties: {
+                      query: {
+                        type: 'string',
+                        description: 'The search query to find a suitable workflow'
+                      }
+                    },
+                    required: ['query']
+                  }
                 }
               ]
             }
@@ -101,29 +116,11 @@ export async function POST(request: Request) {
               });
             }
 
-            // First, search for a matching workflow
-            const workflowResults = workflowFuse.search(query);
-
-            if (workflowResults.length > 0) {
-              const workflow = workflowResults[0].item;
-              const chainedPrompts = workflow.promptIds.map((id: string) => prompts.find((p: { id: string }) => p.id === id)).filter(Boolean);
-
-              return NextResponse.json({
-                jsonrpc: '2.0',
-                id,
-                result: {
-                  content: [{
-                    type: 'prompt_chain',
-                    chain: chainedPrompts
-                  }]
-                }
-              });
-            }
-
-            // If no workflow is found, search for a single prompt
+            // Search for a matching prompt
             const promptResults = promptFuse.search(query);
             
             if (promptResults.length > 0) {
+              const bestMatch = promptResults[0].item;
               return NextResponse.json({
                 jsonrpc: '2.0',
                 id,
@@ -131,7 +128,14 @@ export async function POST(request: Request) {
                   content: [
                     {
                       type: 'single_prompt',
-                      prompt: promptResults[0].item
+                      prompt: {
+                        id: bestMatch.id,
+                        title: bestMatch.title,
+                        description: bestMatch.description,
+                        content: bestMatch.content,
+                        tags: bestMatch.tags,
+                        model: bestMatch.model
+                      }
                     }
                   ]
                 }
@@ -144,11 +148,99 @@ export async function POST(request: Request) {
                   content: [
                     {
                       type: 'text',
-                      text: 'No matching prompt found'
+                      text: 'No matching prompt found for your query. Try rephrasing your request or be more specific about what you need.'
                     }
                   ]
                 }
               });
+            }
+          }
+          
+          if (name === 'get_prompt_workflow') {
+            const { query } = args;
+            
+            if (!query) {
+              return NextResponse.json({
+                jsonrpc: '2.0',
+                id,
+                error: {
+                  code: -32602,
+                  message: 'Query parameter is required'
+                }
+              });
+            }
+
+            // First, search for a matching workflow
+            const workflowResults = workflowFuse.search(query);
+
+            if (workflowResults.length > 0) {
+              const workflow = workflowResults[0].item;
+              const chainedPrompts = workflow.promptIds.map((id: number) => 
+                prompts.find((p: { id: number }) => p.id === id)
+              ).filter(Boolean);
+
+              return NextResponse.json({
+                jsonrpc: '2.0',
+                id,
+                result: {
+                  content: [{
+                    type: 'prompt_workflow',
+                    workflow: {
+                      name: workflow.name,
+                      description: workflow.description,
+                      prompts: chainedPrompts.map(prompt => {
+                        if (!prompt) return null;
+                        return {
+                          id: prompt.id,
+                          title: prompt.title,
+                          description: prompt.description,
+                          content: prompt.content,
+                          tags: prompt.tags,
+                          model: prompt.model
+                        };
+                      }).filter(Boolean)
+                    }
+                  }]
+                }
+              });
+            } else {
+              // If no workflow found, return a single prompt as fallback
+              const promptResults = promptFuse.search(query);
+              if (promptResults.length > 0) {
+                const bestMatch = promptResults[0].item;
+                return NextResponse.json({
+                  jsonrpc: '2.0',
+                  id,
+                  result: {
+                    content: [
+                      {
+                        type: 'single_prompt',
+                        prompt: {
+                          id: bestMatch.id,
+                          title: bestMatch.title,
+                          description: bestMatch.description,
+                          content: bestMatch.content,
+                          tags: bestMatch.tags,
+                          model: bestMatch.model
+                        }
+                      }
+                    ]
+                  }
+                });
+              } else {
+                return NextResponse.json({
+                  jsonrpc: '2.0',
+                  id,
+                  result: {
+                    content: [
+                      {
+                        type: 'text',
+                        text: 'No matching workflow or prompt found for your query. Try rephrasing your request.'
+                      }
+                    ]
+                  }
+                });
+              }
             }
           }
           break;
@@ -160,7 +252,15 @@ export async function POST(request: Request) {
     if (query) {
       const results = promptFuse.search(query);
       if (results.length > 0) {
-        return NextResponse.json(results[0].item);
+        const bestMatch = results[0].item;
+        return NextResponse.json({
+          id: bestMatch.id,
+          title: bestMatch.title,
+          description: bestMatch.description,
+          content: bestMatch.content,
+          tags: bestMatch.tags,
+          model: bestMatch.model
+        });
       } else {
         return NextResponse.json({ error: 'No matching prompt found' }, { status: 404 });
       }
