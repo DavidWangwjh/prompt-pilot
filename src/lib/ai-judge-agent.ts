@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
+import { GoogleGenerativeAI, GenerativeModel } from '@google/generative-ai';
 
 const MODEL_NAME = "gemini-2.0-flash";
 const API_KEY = process.env.GEMINI_API_KEY || "";
@@ -28,7 +28,7 @@ export interface JudgeResult {
 
 export class AIJudgeAgent {
   private genAI: GoogleGenerativeAI;
-  private model: any;
+  private model: GenerativeModel;
 
   constructor() {
     if (!API_KEY) {
@@ -122,18 +122,20 @@ IMPORTANT: Return ONLY the JSON object. No additional text, markdown, or explana
     }
   }
 
-  private isValidJudgeResult(result: any): boolean {
-    return result.feedback && 
-           result.scores && 
-           result.scores.promptA && 
-           result.scores.promptB &&
-           result.winner && 
-           result.reasoning;
+  private isValidJudgeResult(result: unknown): result is JudgeResult {
+    return typeof result === 'object' && result !== null &&
+           'feedback' in result && 
+           'scores' in result && 
+           typeof result.scores === 'object' && result.scores !== null &&
+           'promptA' in result.scores && 
+           'promptB' in result.scores &&
+           'winner' in result && 
+           'reasoning' in result;
   }
 
-  private normalizeJudgeResult(result: any): JudgeResult {
+  private normalizeJudgeResult(result: unknown): JudgeResult {
     // Ensure all scores are numbers and within 0-100 range
-    const normalizeScores = (scores: any): PromptAnalysis => ({
+    const normalizeScores = (scores: Record<string, unknown>): PromptAnalysis => ({
       clarity: Math.min(100, Math.max(0, Number(scores.clarity) || 0)),
       engagement: Math.min(100, Math.max(0, Number(scores.engagement) || 0)),
       creativity: Math.min(100, Math.max(0, Number(scores.creativity) || 0)),
@@ -141,19 +143,21 @@ IMPORTANT: Return ONLY the JSON object. No additional text, markdown, or explana
       specificity: Math.min(100, Math.max(0, Number(scores.specificity) || 0))
     });
 
+    const typedResult = result as Partial<JudgeResult>;
+
     return {
-      feedback: result.feedback || "Analysis completed",
+      feedback: typedResult.feedback || "Analysis completed",
       scores: {
-        promptA: normalizeScores(result.scores.promptA),
-        promptB: normalizeScores(result.scores.promptB)
+        promptA: normalizeScores((typedResult.scores?.promptA as unknown as Record<string, unknown>) || {}),
+        promptB: normalizeScores((typedResult.scores?.promptB as unknown as Record<string, unknown>) || {})
       },
-      winner: result.winner || "promptB",
-      reasoning: result.reasoning || "Analysis completed",
+      winner: typedResult.winner || "promptB",
+      reasoning: typedResult.reasoning || "Analysis completed",
       recommendations: {
-        promptA: Array.isArray(result.recommendations?.promptA) ? result.recommendations.promptA : [],
-        promptB: Array.isArray(result.recommendations?.promptB) ? result.recommendations.promptB : []
+        promptA: Array.isArray(typedResult.recommendations?.promptA) ? typedResult.recommendations.promptA : [],
+        promptB: Array.isArray(typedResult.recommendations?.promptB) ? typedResult.recommendations.promptB : []
       },
-      overallAssessment: result.overallAssessment || "Both prompts show potential with room for improvement"
+      overallAssessment: typedResult.overallAssessment || "Both prompts show potential with room for improvement"
     };
   }
 
