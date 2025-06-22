@@ -1,6 +1,7 @@
-import { ThumbsUp, Save, Copy, X, Edit, Check, Loader2 } from 'lucide-react';
+import { ThumbsUp, Save, Copy, X, Edit, Check, Loader2, Lock } from 'lucide-react';
 import { useState } from 'react';
 import { useDashboard } from '@/context/DashboardContext';
+import { clsx } from 'clsx';
 
 interface PromptCardProps {
   id: number;
@@ -9,14 +10,17 @@ interface PromptCardProps {
   tags: string[];
   likes: number;
   model: string;
+  is_public: boolean;
   view: 'grid' | 'list';
   source: 'explore' | 'vault';
   onSave?: () => void;
   onEdit?: () => void;
   isSaving?: boolean;
+  size?: 'large' | 'small';
+  variant?: 'default' | 'featured';
 }
 
-export default function PromptCard({ id, title, content, tags, likes, model, view, source, onSave, onEdit, isSaving = false }: PromptCardProps) {
+export default function PromptCard({ id, title, content, tags, likes, model, is_public, view, source, onSave, onEdit, isSaving = false, size = 'large', variant = 'default' }: PromptCardProps) {
   const { toggleLike, likedPrompts } = useDashboard();
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -48,24 +52,35 @@ export default function PromptCard({ id, title, content, tags, likes, model, vie
   };
 
   const renderFooter = () => (
-    <div className="px-4 py-3 border-t border-gray-200 flex justify-between items-center text-sm text-gray-500">
+    <div className={clsx(
+      "px-4 py-3 border-t border-gray-200 flex justify-between items-center text-gray-500",
+      size === 'large' ? 'text-sm' : 'text-xs',
+      variant === 'featured' ? 'bg-purple-100' : 'bg-sky-100'
+    )}>
       <div className="flex items-center gap-4">
-        <button 
-          className={`flex items-center gap-1 transition-all duration-200 cursor-pointer ${
-            isLiked 
-              ? 'text-blue-600 hover:text-blue-700' 
-              : 'text-gray-500 hover:text-blue-600'
-          }`}
-          onClick={handleLike}
-        >
-          <ThumbsUp 
-            size={16} 
-            className={`hover:scale-110 transition-transform duration-200 ${
-              isLiked ? 'fill-current' : ''
-            }`} 
-          />
-          <span>{likes}</span>
-        </button>
+        {is_public ? (
+          <button 
+            className={`flex items-center gap-1 transition-all duration-200 cursor-pointer ${
+              isLiked 
+                ? 'text-blue-600 hover:text-blue-700' 
+                : 'text-gray-500 hover:text-blue-600'
+            }`}
+            onClick={handleLike}
+          >
+            <ThumbsUp 
+              size={size === 'large' ? 16 : 14}
+              className={`hover:scale-110 transition-transform duration-200 ${
+                isLiked ? 'fill-current' : ''
+              }`} 
+            />
+            <span>{likes}</span>
+          </button>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <Lock size={size === 'large' ? 14 : 12} />
+            <span>Private</span>
+          </div>
+        )}
       </div>
       {source === 'explore' && onSave && (
         <button 
@@ -79,9 +94,9 @@ export default function PromptCard({ id, title, content, tags, likes, model, vie
           disabled={isSaving}
         >
           {isSaving ? (
-            <Loader2 size={16} className="animate-spin" />
+            <Loader2 size={size === 'large' ? 16 : 14} className="animate-spin" />
           ) : (
-            <Save size={16} className="hover:scale-110 transition-transform duration-200" />
+            <Save size={size === 'large' ? 16 : 14} className="hover:scale-110 transition-transform duration-200" />
           )}
           <span>{isSaving ? 'Saving...' : 'Save'}</span>
         </button>
@@ -93,7 +108,10 @@ export default function PromptCard({ id, title, content, tags, likes, model, vie
     return (
       <>
         <div 
-          className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200 flex items-center p-4 w-full card-hover group cursor-pointer"
+          className={clsx(
+            "rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200 flex items-center p-4 w-full card-hover group cursor-pointer",
+            variant === 'featured' ? 'bg-lime-400' : 'bg-white'
+          )}
           onClick={() => setShowDetailModal(true)}
         >
           <div className="flex-1 min-w-0">
@@ -109,22 +127,29 @@ export default function PromptCard({ id, title, content, tags, likes, model, vie
             ))}
           </div>
           <div className="flex items-center gap-4 text-sm text-gray-500 ml-auto">
-            <button 
-              className={`flex items-center gap-1 transition-all duration-200 cursor-pointer ${
-                isLiked 
-                  ? 'text-blue-600 hover:text-blue-700' 
-                  : 'text-gray-500 hover:text-blue-600'
-              }`}
-              onClick={handleLike}
-            >
-              <ThumbsUp 
-                size={16} 
-                className={`hover:scale-110 transition-transform duration-200 ${
-                  isLiked ? 'fill-current' : ''
-                }`} 
-              />
-              <span>{likes}</span>
-            </button>
+            {is_public ? (
+              <button 
+                className={`flex items-center gap-1 transition-all duration-200 cursor-pointer ${
+                  isLiked 
+                    ? 'text-blue-600 hover:text-blue-700' 
+                    : 'text-gray-500 hover:text-blue-600'
+                }`}
+                onClick={handleLike}
+              >
+                <ThumbsUp 
+                  size={16} 
+                  className={`hover:scale-110 transition-transform duration-200 ${
+                    isLiked ? 'fill-current' : ''
+                  }`} 
+                />
+                <span>{likes}</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <Lock size={14} />
+                <span>Private</span>
+              </div>
+            )}
             {source === 'explore' && onSave && (
               <button 
                 className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-200 btn-hover disabled:opacity-50 disabled:cursor-not-allowed"
@@ -219,22 +244,29 @@ export default function PromptCard({ id, title, content, tags, likes, model, vie
 
                 {/* Stats */}
                 <div className="flex items-center gap-6 text-sm text-gray-500">
-                  <button 
-                    className={`flex items-center gap-1 transition-all duration-200 cursor-pointer ${
-                      isLiked 
-                        ? 'text-blue-600 hover:text-blue-700' 
-                        : 'text-gray-500 hover:text-blue-600'
-                    }`}
-                    onClick={handleLike}
-                  >
-                    <ThumbsUp 
-                      size={16} 
-                      className={`${
-                        isLiked ? 'fill-current' : ''
-                      }`} 
-                    />
-                    <span>{likes} likes</span>
-                  </button>
+                  {is_public ? (
+                    <button 
+                      className={`flex items-center gap-1 transition-all duration-200 cursor-pointer ${
+                        isLiked 
+                          ? 'text-blue-600 hover:text-blue-700' 
+                          : 'text-gray-500 hover:text-blue-600'
+                      }`}
+                      onClick={handleLike}
+                    >
+                      <ThumbsUp 
+                        size={16} 
+                        className={`${
+                          isLiked ? 'fill-current' : ''
+                        }`} 
+                      />
+                      <span>{likes} likes</span>
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <Lock size={14} />
+                      <span>Private</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -255,30 +287,70 @@ export default function PromptCard({ id, title, content, tags, likes, model, vie
   // Grid view (default)
   return (
     <>
-      <div 
-        className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200 card-hover group cursor-pointer flex flex-col h-80"
+      <div
+        className={clsx(
+          "rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200",
+          "flex flex-col",                  // stack header/content/tags/footer
+          size === "large" ? "h-80" : "h-72", // fixed card height
+          "card-hover group cursor-pointer",
+          
+        )}
         onClick={() => setShowDetailModal(true)}
       >
-        <div className="p-4 flex flex-col flex-grow">
+        {/* ── CARD BODY ── */}
+        <div className="p-4 flex flex-col overflow-hidden text-clip">
+          {/* Header */}
           <div className="flex justify-between items-start">
-            <div className="flex-1">
-              <h3 className="font-bold text-lg text-gray-900 group-hover:text-blue-600 transition-colors duration-200">{title}</h3>
-              <p className="text-sm text-gray-500 mt-1">Model: {model}</p>
-            </div>
+            <h3
+              className={clsx(
+                "font-bold group-hover:text-blue-600 transition-colors duration-200",
+                size === "large" ? "text-lg" : "text-base"
+              )}
+            >
+              {title}
+            </h3>
+            <span
+              className={clsx(
+                "px-2 py-1 bg-gray-100 font-medium rounded whitespace-nowrap",
+                size === "large" ? "text-xs" : "text-[10px]"
+              )}
+            >
+              {model}
+            </span>
           </div>
-          <div className="mt-3 flex-grow overflow-hidden">
-            <p className="text-sm text-gray-600 line-clamp-4">
+
+          {/* Content area: flex-grow + clamp */}
+          <div className="mt-1">
+            <p
+              className={clsx(
+                "text-gray-600",
+                size === "large" ? "text-sm" : "text-xs",
+                size === "large" ? "line-clamp-8" : "line-clamp-5"
+              )}
+            >
               {content}
             </p>
           </div>
-          <div className="pt-4 flex flex-wrap gap-2">
-            {tags.slice(0, 6).map((tag) => (
-              <span key={tag} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full hover:bg-blue-200 transition-colors duration-200">
+        </div>
+        {/* Tags: pushed to bottom of body via mt-auto */}
+        <div className="mt-auto flex flex-wrap gap-2 px-4 pb-3 pt-2">
+          {tags
+            .slice(0, size === "large" ? 6 : 4)
+            .map((tag) => (
+              <span
+                key={tag}
+                className={clsx(
+                  "px-2 py-1 bg-blue-100 font-medium rounded-full hover:bg-blue-200 transition-colors duration-200",
+                  size === "large" ? "text-xs" : "text-[10px]",
+                  "text-blue-800"
+                )}
+              >
                 {tag}
               </span>
             ))}
-          </div>
         </div>
+
+        {/* Footer (likes / save) */}
         {renderFooter()}
       </div>
 
@@ -354,22 +426,29 @@ export default function PromptCard({ id, title, content, tags, likes, model, vie
 
               {/* Stats */}
               <div className="flex items-center gap-6 text-sm text-gray-500">
-                <button 
-                  className={`flex items-center gap-1 transition-all duration-200 cursor-pointer ${
-                    isLiked 
-                      ? 'text-blue-600 hover:text-blue-700' 
-                      : 'text-gray-500 hover:text-blue-600'
-                  }`}
-                  onClick={handleLike}
-                >
-                  <ThumbsUp 
-                    size={16} 
-                    className={`${
-                      isLiked ? 'fill-current' : ''
-                    }`} 
-                  />
-                  <span>{likes} likes</span>
-                </button>
+                {is_public ? (
+                  <button 
+                    className={`flex items-center gap-1 transition-all duration-200 cursor-pointer ${
+                      isLiked 
+                        ? 'text-blue-600 hover:text-blue-700' 
+                        : 'text-gray-500 hover:text-blue-600'
+                    }`}
+                    onClick={handleLike}
+                  >
+                    <ThumbsUp 
+                      size={16} 
+                      className={`${
+                        isLiked ? 'fill-current' : ''
+                      }`} 
+                    />
+                    <span>{likes} likes</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <Lock size={14} />
+                    <span>Private</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
