@@ -295,10 +295,8 @@ async function executePromptChain(prompts: Prompt[]) {
     return context; // Return the final result
 }
 
-
 export async function GET() {
-  // plain JSON fallback for curl/testing
-  return NextResponse.json({
+  const discovery = {
     jsonrpc: '2.0',
     id: null,
     result: {
@@ -308,16 +306,32 @@ export async function GET() {
         tools: {
           web:                   { description: 'Browser-based HTTP client' },
           python:                { description: 'Headless Python REPL for private analysis' },
-          create_execution_plan: { description: "Analyzes a user's task…"},
-          execute_prompt_chain:  { description: 'Executes an ordered chain…'}
+          create_execution_plan: { description: "Analyzes a user's task and creates a sequential plan of prompts" },
+          execute_prompt_chain:  { description: 'Executes an ordered chain of prompts' }
         }
       }
     }
+  }
+
+  const stream = new ReadableStream({
+    start(ctrl) {
+      ctrl.enqueue(`data: ${JSON.stringify(discovery)}\n\n`)
+      ctrl.close()
+    }
+  })
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive'
+    }
   })
 }
+
 export async function POST(request: Request) {
-  const body = await request.json();
-  const { method, params, id } = body;
+  const body = await request.json()
+  const { method, params, id } = body
 
   try {
     switch (method) {
@@ -327,9 +341,10 @@ export async function POST(request: Request) {
           id,
           result: {
             protocolVersion: '2024-11-05',
-            serverInfo: { name: 'PromptPilot MCP' }
+            serverInfo: { name: 'PromptPilot MCP', version: '1.0.0' },
+            capabilities: { tools: {} }
           }
-        });
+        })
 
       case 'tools/list':
         return NextResponse.json({
@@ -367,41 +382,35 @@ export async function POST(request: Request) {
               }
             ]
           }
-        });
+        })
 
       case 'tools/call':
         if (params.name === 'create_execution_plan') {
-          const plan = await createExecutionPlan(params.arguments.task);
-          return NextResponse.json({
-            jsonrpc: '2.0',
-            id,
-            result: plan
-          });
+          const plan = await createExecutionPlan(params.arguments.task)
+          return NextResponse.json({ jsonrpc: '2.0', id, result: plan })
         }
         if (params.name === 'execute_prompt_chain') {
-          const output = await executePromptChain(params.arguments.prompts);
+          const out = await executePromptChain(params.arguments.prompts)
           return NextResponse.json({
             jsonrpc: '2.0',
             id,
-            result: { finalAnswer: output }
-          });
+            result: { finalAnswer: out }
+          })
         }
-        // Unknown method under tools/call
-        throw new Error(`Tool not found: ${params.name}`);
+        throw new Error(`Tool not found: ${params.name}`)
 
       default:
-        // Method not recognized
-        throw new Error(`Method not found: ${method}`);
+        throw new Error(`Method not found: ${method}`)
     }
-  } catch (error) {
-    console.error('[MCP] Error in API handler:', error);
+  } catch (err) {
+    console.error('[MCP] error', err)
     return NextResponse.json({
       jsonrpc: '2.0',
       id: id ?? null,
       error: {
         code: -32603,
-        message: error instanceof Error ? error.message : 'Internal error'
+        message: err instanceof Error ? err.message : 'Internal error'
       }
-    });
+    })
   }
 }
