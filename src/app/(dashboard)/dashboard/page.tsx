@@ -4,6 +4,7 @@ import { useDashboard } from '@/context/DashboardContext';
 import ExploreView from '@/components/views/ExploreView';
 import PlaygroundView from '@/components/views/PlaygroundView';
 import VaultView from '@/components/views/VaultView';
+import MCPConfigView from '@/components/views/MCPConfigView';
 
 const PlaceholderComponent = ({ title }: { title: string }) => {
   return (
@@ -26,7 +27,7 @@ export default function DashboardPage() {
       case 'Playground':
         return <PlaygroundView />;
       case 'MCP':
-        return <PlaceholderComponent title="MCP Config" />;
+        return <MCPConfigView />;
       default:
         return <VaultView />;
     }
