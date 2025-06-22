@@ -6,12 +6,10 @@ import { ClipboardDocumentIcon, ClipboardDocumentCheckIcon } from '@heroicons/re
 // Example MCP JSON config
 const exampleMCPConfig = {
   "mcpServers": {
-    "prompt-pilot": {
+    "promptpilot": {
       "command": "npx",
-      "args": ["@prompt-pilot/mcp-server"],
-      "env": {
-        "PROMPT_PILOT_API_KEY": "your-api-key-here"
-      }
+      "args": ["-y", "@modelcontextprotocol/server-nextjs", "https://mcprompt.vercel.app/api/mcp-link"],
+      "env": {}
     }
   }
 };
