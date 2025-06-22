@@ -15,7 +15,7 @@ const workflowFuse = new Fuse(workflows, {
   threshold: 0.4,
 });
 
-export async function GET(request: Request) {
+export async function GET() {
   console.log('GET request received');
   return NextResponse.json({ 
     message: 'MCP endpoint - use POST for MCP protocol requests',
@@ -106,7 +106,7 @@ export async function POST(request: Request) {
 
             if (workflowResults.length > 0) {
               const workflow = workflowResults[0].item;
-              const chainedPrompts = workflow.promptIds.map(id => prompts.find(p => p.id === id)).filter(p => p);
+              const chainedPrompts = workflow.promptIds.map((id: string) => prompts.find((p: { id: string }) => p.id === id)).filter(Boolean);
 
               return NextResponse.json({
                 jsonrpc: '2.0',
