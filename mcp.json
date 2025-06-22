@@ -4,6 +4,7 @@
       "command": "npx",
       "args": [
         "@modelcontextprotocol/inspector",
+        "--cli",
         "https://mcprompt.vercel.app/api/mcp-link"
       ],
       "tools": [
