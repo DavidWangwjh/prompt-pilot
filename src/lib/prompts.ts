@@ -92,4 +92,14 @@ export const prompts = [
     comments: 0,
     model: 'GPT-4',
   },
+  {
+    id: 10,
+    title: 'Internal Knowledge Research Prompt',
+    description: 'Generates a detailed overview of a topic based on internal knowledge.',
+    content: 'Provide a comprehensive overview of the key concepts, history, and current state of "{{query}}". Include different perspectives and potential future developments.',
+    tags: ['research', 'knowledge-base'],
+    likes: 0,
+    comments: 0,
+    model: 'GPT-4',
+  }
 ]; 

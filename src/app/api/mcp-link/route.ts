@@ -36,56 +36,56 @@ type ActionVerb = 'research' | 'write' | 'summarize' | 'review' | 'code';
 // MCP Tool definitions
 const tools = [
   {
-//     name: 'list_prompts',
-//     description: 'List all available prompts in the PromptPilot vault',
-//     inputSchema: {
-//       type: 'object',
-//       properties: {
-//         category: {
-//           type: 'string',
-//           description: 'Optional category filter'
-//         },
-//         search: {
-//           type: 'string',
-//           description: 'Optional search term to filter prompts'
-//         }
-//       }
-//     }
-//   },
-//   {
-//     name: 'get_prompt',
-//     description: 'Get a specific prompt by ID',
-//     inputSchema: {
-//       type: 'object',
-//       properties: {
-//         id: {
-//           type: 'number',
-//           description: 'The ID of the prompt to retrieve'
-//         }
-//       },
-//       required: ['id']
-//     }
-//   },
-//   {
-//     name: 'search_prompts',
-//     description: 'Search prompts by content, tags, or description',
-//     inputSchema: {
-//       type: 'object',
-//       properties: {
-//         query: {
-//           type: 'string',
-//           description: 'Search query'
-//         },
-//         limit: {
-//           type: 'number',
-//           description: 'Maximum number of results to return',
-//           default: 10
-//         }
-//       },
-//       required: ['query']
-//     }
-//   },
-//  {
+    name: 'list_prompts',
+    description: 'List all available prompts in the PromptPilot vault',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        category: {
+          type: 'string',
+          description: 'Optional category filter'
+        },
+        search: {
+          type: 'string',
+          description: 'Optional search term to filter prompts'
+        }
+      }
+    }
+  },
+  {
+    name: 'get_prompt',
+    description: 'Get a specific prompt by ID',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'number',
+          description: 'The ID of the prompt to retrieve'
+        }
+      },
+      required: ['id']
+    }
+  },
+  {
+    name: 'search_prompts',
+    description: 'Search prompts by content, tags, or description',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Search query'
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of results to return',
+          default: 10
+        }
+      },
+      required: ['query']
+    }
+  },
+ {
     name: 'create_execution_plan',
     description: 'Create an execution plan for a given task using relevant prompts from the vault',
     inputSchema: {
