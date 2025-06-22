@@ -4,7 +4,7 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/ge
 const MODEL_NAME = "gemini-2.0-flash";
 const API_KEY = process.env.GEMINI_API_KEY || "";
 
-async function runGenerate(prompt: string, model: string) {
+async function runGenerate(prompt: string) {
     if (!API_KEY) {
         throw new Error('GEMINI_API_KEY is not set');
     }
@@ -86,8 +86,8 @@ IMPORTANT: Return your response as a single, valid JSON object only. Do not incl
         const endIndex = text.lastIndexOf('}') + 1;
         const jsonString = text.substring(startIndex, endIndex);
         return JSON.parse(jsonString);
-    } catch (e) {
-        console.error("Failed to parse JSON from Gemini response:", text);
+    } catch (error) {
+        console.error("Failed to parse JSON from Gemini response:", text, error);
         throw new Error("The AI judge returned an invalid response. Please try again.");
     }
 }
@@ -104,8 +104,8 @@ export async function POST(request: Request) {
         }
         
         const [generatedA, generatedB] = await Promise.all([
-            runGenerate(promptA, model),
-            runGenerate(promptB, model)
+            runGenerate(promptA),
+            runGenerate(promptB)
         ]);
         
         const { feedback, scores } = await runJudgeAndScore(promptA, promptB, generatedA, generatedB);
