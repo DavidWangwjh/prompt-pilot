@@ -49,6 +49,12 @@ async function initializePromptSearch() {
     });
   } catch (error) {
     console.error('Error initializing prompt search:', error);
+    // Initialize with empty array if Supabase is not available
+    promptFuse = new Fuse([], {
+      keys: ['title', 'description', 'tags'],
+      includeScore: true,
+      threshold: 0.4,
+    });
   }
 }
 
