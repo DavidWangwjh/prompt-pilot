@@ -309,8 +309,21 @@ export async function GET() {
                 version: '1.0.0'
             },
             capabilities: {
-                tools: {}
-            }
+                tools: {
+                  web: {
+                    description: "Browser-based HTTP client"
+                  },
+                  python: {
+                    description: "Headless Python REPL for private analysis"
+                  },
+                  create_execution_plan: {
+                    description: "Analyzes a user's task and creates a sequential plan of prompts"
+                  },
+                  execute_prompt_chain: {
+                    description: "Executes an ordered chain of prompts"
+                  }
+                }
+              }
         }
     });
 }
