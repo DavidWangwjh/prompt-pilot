@@ -47,7 +47,7 @@ export default function LandingPage() {
               </div>
 
               <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl lg:text-7xl/none bg-gradient-to-r from-gray-900 via-blue-800 to-purple-800 bg-clip-text text-transparent animate-in slide-in-from-bottom-4 duration-1000">
-                Manage, Chain, Execute
+                Manage. Chain. Execute.
               </h1>
               
               <p className="mx-auto max-w-[700px] text-gray-600 md:text-xl leading-relaxed animate-in slide-in-from-bottom-4 duration-1000 delay-200">
