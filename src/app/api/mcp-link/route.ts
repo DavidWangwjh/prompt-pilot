@@ -295,107 +295,147 @@ async function executePromptChain(prompts: Prompt[]) {
     return context; // Return the final result
 }
 
-
-// --- API Route Handler ---
-export async function GET() {
-    // Handle GET requests for MCP server discovery
-    return NextResponse.json({
+// ── SSE-capable GET for discovery ──
+export async function GET(request: Request) {
+    const accept = request.headers.get('accept') || '';
+    // If the client requests an SSE stream, send one discovery event:
+    if (accept.includes('text/event-stream')) {
+      const discovery = {
         jsonrpc: '2.0',
         id: null,
         result: {
-            protocolVersion: '2024-11-05',
-            serverInfo: {
-                name: 'PromptPilot MCP',
-                version: '1.0.0'
-            },
-            capabilities: {
-                tools: {
-                  web: {
-                    description: "Browser-based HTTP client"
-                  },
-                  python: {
-                    description: "Headless Python REPL for private analysis"
-                  },
-                  create_execution_plan: {
-                    description: "Analyzes a user's task and creates a sequential plan of prompts"
-                  },
-                  execute_prompt_chain: {
-                    description: "Executes an ordered chain of prompts"
-                  }
-                }
+          protocolVersion: '2024-11-05',
+          serverInfo: { name: 'PromptPilot MCP', version: '1.0.0' },
+          capabilities: {
+            tools: {
+              web: {
+                description: 'Browser-based HTTP client'
+              },
+              python: {
+                description: 'Headless Python REPL for private analysis'
+              },
+              create_execution_plan: {
+                description: "Analyzes a user's task and creates a sequential plan of prompts"
+              },
+              execute_prompt_chain: {
+                description: 'Executes an ordered chain of prompts'
               }
+            }
+          }
         }
+      };
+  
+      const stream = new ReadableStream({
+        start(ctrl) {
+          // Send a single SSE discovery event, then close stream
+          ctrl.enqueue(`event: discovery\ndata: ${JSON.stringify(discovery)}\n\n`);
+          ctrl.close();
+        }
+      });
+  
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive'
+        }
+      });
+    }
+  
+    // Fallback for curl/testing: plain JSON
+    return NextResponse.json({
+      jsonrpc: '2.0',
+      id: null,
+      result: {
+        protocolVersion: '2024-11-05',
+        serverInfo: { name: 'PromptPilot MCP', version: '1.0.0' },
+        capabilities: {
+          tools: {
+            web: { description: 'Browser-based HTTP client' },
+            python: { description: 'Headless Python REPL for private analysis' },
+            create_execution_plan: {
+              description: "Analyzes a user's task and creates a sequential plan of prompts"
+            },
+            execute_prompt_chain: {
+              description: 'Executes an ordered chain of prompts'
+            }
+          }
+        }
+      }
     });
-}
-
-export async function POST(request: Request) {
+  }
+  
+  // ── JSON-RPC POST handler ──
+  export async function POST(request: Request) {
     const body = await request.json();
     const { method, params, id } = body;
-
+  
     try {
-        switch (method) {
-            case 'initialize':
-                return NextResponse.json({
-                    jsonrpc: '2.0', id,
-                    result: { protocolVersion: '2024-11-05', serverInfo: { name: 'PromptPilot MCP' } }
-                });
-
-            case 'tools/list':
-                return NextResponse.json({
-                    jsonrpc: '2.0', id,
-                    result: {
-                        tools: [
-                            {
-                                name: 'create_execution_plan',
-                                description: "Analyzes a user's task and creates a sequential plan of prompts from the user's vault.",
-                                inputSchema: {
-                                    type: 'object',
-                                    properties: { task: { type: 'string', description: 'The task to accomplish.' } },
-                                    required: ['task']
-                                }
-                            },
-                            {
-                                name: 'execute_prompt_chain',
-                                description: "Executes an ordered chain of prompts, feeding the output of each step as context to the next.",
-                                inputSchema: {
-                                    type: 'object',
-                                    properties: { 
-                                        prompts: { 
-                                            type: 'array', 
-                                            description: 'An array of prompt objects to execute in sequence.',
-                                            items: { type: 'object' } 
-                                        } 
-                                    },
-                                    required: ['prompts']
-                                }
-                            }
-                        ]
-                    }
-                });
-
-            case 'tools/call':
-                if (params.name === 'create_execution_plan') {
-                    const executionPlan = await createExecutionPlan(params.arguments.task);
-                    return NextResponse.json({ jsonrpc: '2.0', id, result: executionPlan });
+      switch (method) {
+        case 'initialize':
+          return NextResponse.json({
+            jsonrpc: '2.0', id,
+            result: { protocolVersion: '2024-11-05', serverInfo: { name: 'PromptPilot MCP' } }
+          });
+  
+        case 'tools/list':
+          return NextResponse.json({
+            jsonrpc: '2.0', id,
+            result: {
+              tools: [
+                {
+                  name: 'create_execution_plan',
+                  description:
+                    "Analyzes a user's task and creates a sequential plan of prompts from the user's vault.",
+                  inputSchema: {
+                    type: 'object',
+                    properties: { task: { type: 'string', description: 'The task to accomplish.' } },
+                    required: ['task']
+                  }
+                },
+                {
+                  name: 'execute_prompt_chain',
+                  description:
+                    'Executes an ordered chain of prompts, feeding the output of each step as context to the next.',
+                  inputSchema: {
+                    type: 'object',
+                    properties: {
+                      prompts: {
+                        type: 'array',
+                        description: 'An array of prompt objects to execute in sequence.',
+                        items: { type: 'object' }
+                      }
+                    },
+                    required: ['prompts']
+                  }
                 }
-                if (params.name === 'execute_prompt_chain') {
-                    const finalResult = await executePromptChain(params.arguments.prompts);
-                    return NextResponse.json({ jsonrpc: '2.0', id, result: { finalAnswer: finalResult } });
-                }
-                throw new Error(`Method '${params.name}' not found.`);
-
-            default:
-                throw new Error(`Method '${method}' not found.`);
-        }
+              ]
+            }
+          });
+  
+        case 'tools/call':
+          if (params.name === 'create_execution_plan') {
+            const executionPlan = await createExecutionPlan(params.arguments.task);
+            return NextResponse.json({ jsonrpc: '2.0', id, result: executionPlan });
+          }
+          if (params.name === 'execute_prompt_chain') {
+            const finalResult = await executePromptChain(params.arguments.prompts);
+            return NextResponse.json({ jsonrpc: '2.0', id, result: { finalAnswer: finalResult } });
+          }
+          throw new Error(`Method '${params.name}' not found.`);
+  
+        default:
+          throw new Error(`Method '${method}' not found.`);
+      }
     } catch (error) {
-        console.error('[MCP] Error in API handler:', error);
-        return NextResponse.json({
-            jsonrpc: '2.0',
-            id: id || null,
-            error: {
-                code: -32603,
-                message: error instanceof Error ? error.message : 'An internal server error occurred.',
-            },
-        });
+      console.error('[MCP] Error in API handler:', error);
+      return NextResponse.json({
+        jsonrpc: '2.0',
+        id: id || null,
+        error: {
+          code: -32603,
+          message: error instanceof Error ? error.message : 'An internal server error occurred.'
+        }
+      });
     }
-} 
+  }
