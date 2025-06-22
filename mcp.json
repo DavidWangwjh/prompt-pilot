@@ -3,8 +3,7 @@
     "promptpilot": {
       "command": "npx",
       "args": [
-        "-y",
-        "@modelcontextprotocol/server-nextjs",
+        "@modelcontextprotocol/inspector",
         "https://mcprompt.vercel.app/api/mcp-link"
       ],
       "tools": [
