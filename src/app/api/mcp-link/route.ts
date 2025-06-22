@@ -4,91 +4,88 @@ import { Database } from '@/lib/database.types';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // MCP Protocol types
-// --- Error type for MCPResponse ---
-interface MCPError {
-  code: number;
-  message: string;
+interface MCPRequest {
+  jsonrpc: '2.0';
+  id: number | string;
+  method: string;
+  params?: Record<string, unknown>;
 }
 
-// --- Tool argument types ---
-type ListPromptsParams = { category?: string; search?: string };
-type GetPromptParams = { id: number };
-type SearchPromptsParams = { query: string; limit?: number };
-type CreateExecutionPlanParams = { task: string };
-type ExecutePromptChainParams = { prompts: Prompt[] };
+interface MCPResponse {
+  jsonrpc: '2.0';
+  id: number | string;
+  result?: Record<string, unknown>;
+  error?: {
+    code: number;
+    message: string;
+  };
+}
 
-type ToolCallParams =
-  | ({ name: 'list_prompts'; arguments: ListPromptsParams })
-  | ({ name: 'get_prompt'; arguments: GetPromptParams })
-  | ({ name: 'search_prompts'; arguments: SearchPromptsParams })
-  | ({ name: 'create_execution_plan'; arguments: CreateExecutionPlanParams })
-  | ({ name: 'execute_prompt_chain'; arguments: ExecutePromptChainParams });
-
-type MCPRequest =
-  | { jsonrpc: '2.0'; id: number | string; method: 'initialize'; params?: undefined }
-  | { jsonrpc: '2.0'; id: number | string; method: 'tools/list'; params?: undefined }
-  | { jsonrpc: '2.0'; id: number | string; method: 'tools/call'; params: ToolCallParams };
-
-type MCPResponse =
-  | { jsonrpc: '2.0'; id: number | string; result?: unknown; error?: undefined }
-  | { jsonrpc: '2.0'; id: number | string; result?: undefined; error?: MCPError };
+// MCP Tool call parameters
+interface MCPToolCallParams {
+  name: string;
+  arguments: Record<string, unknown>;
+}
 
 // Prompt type definition based on database schema
 type Prompt = Database['public']['Tables']['prompts']['Row'];
 
+// Action verbs type
+type ActionVerb = 'research' | 'write' | 'summarize' | 'review' | 'code';
+
 // MCP Tool definitions
 const tools = [
   {
-    name: 'list_prompts',
-    description: 'List all available prompts in the PromptPilot vault',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        category: {
-          type: 'string',
-          description: 'Optional category filter'
-        },
-        search: {
-          type: 'string',
-          description: 'Optional search term to filter prompts'
-        }
-      }
-    }
-  },
-  {
-    name: 'get_prompt',
-    description: 'Get a specific prompt by ID',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        id: {
-          type: 'number',
-          description: 'The ID of the prompt to retrieve'
-        }
-      },
-      required: ['id']
-    }
-  },
-  {
-    name: 'search_prompts',
-    description: 'Search prompts by content, tags, or description',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        query: {
-          type: 'string',
-          description: 'Search query'
-        },
-        limit: {
-          type: 'number',
-          description: 'Maximum number of results to return',
-          default: 10
-        }
-      },
-      required: ['query']
-    }
-  },
-  {
+//     name: 'list_prompts',
+//     description: 'List all available prompts in the PromptPilot vault',
+//     inputSchema: {
+//       type: 'object',
+//       properties: {
+//         category: {
+//           type: 'string',
+//           description: 'Optional category filter'
+//         },
+//         search: {
+//           type: 'string',
+//           description: 'Optional search term to filter prompts'
+//         }
+//       }
+//     }
+//   },
+//   {
+//     name: 'get_prompt',
+//     description: 'Get a specific prompt by ID',
+//     inputSchema: {
+//       type: 'object',
+//       properties: {
+//         id: {
+//           type: 'number',
+//           description: 'The ID of the prompt to retrieve'
+//         }
+//       },
+//       required: ['id']
+//     }
+//   },
+//   {
+//     name: 'search_prompts',
+//     description: 'Search prompts by content, tags, or description',
+//     inputSchema: {
+//       type: 'object',
+//       properties: {
+//         query: {
+//           type: 'string',
+//           description: 'Search query'
+//         },
+//         limit: {
+//           type: 'number',
+//           description: 'Maximum number of results to return',
+//           default: 10
+//         }
+//       },
+//       required: ['query']
+//     }
+//   },
+//  {
     name: 'create_execution_plan',
     description: 'Create an execution plan for a given task using relevant prompts from the vault',
     inputSchema: {
@@ -104,7 +101,7 @@ const tools = [
   },
   {
     name: 'execute_prompt_chain',
-    description: 'Execute a chain of prompts in sequence',
+    description: 'Execute a chain of prompts in seGiven a natural language task from the user, automatically find the best prompts and execute them in sequence to complete the task. Use this when the user gives a multi-step task.quence',
     inputSchema: {
       type: 'object',
       properties: {
@@ -129,7 +126,7 @@ const tools = [
 const FAKE_USER_ID = 'f9df1fa1-1a38-494c-917e-ca3a3b80b75d';
 
 // --- Task Analysis Logic ---
-const ACTION_VERBS: Record<string, RegExp> = {
+const ACTION_VERBS: Record<ActionVerb, RegExp> = {
     research: /research|analyze|investigate|study|explore|find/i,
     write: /write|compose|create|draft|author|generate/i,
     summarize: /summarize|summarise|condense|brief|recap|summary/i,
@@ -143,7 +140,7 @@ async function analyzeTask(task: string) {
 
     // Identify the sequence of actions
     const actions = Object.keys(ACTION_VERBS)
-        .map(verb => ({ verb, index: lowerCaseTask.search(ACTION_VERBS[verb]) }))
+        .map(verb => ({ verb, index: lowerCaseTask.search(ACTION_VERBS[verb as ActionVerb]) }))
         .filter(item => item.index !== -1)
         .sort((a, b) => a.index - b.index)
         .map(item => item.verb);
@@ -200,7 +197,7 @@ async function findSuitablePrompts(analysis: { actions: string[]; keywords: stri
     for (const action of analysis.actions) {
         let bestPrompt: Prompt | null = null;
         let highestScore = 0;
-        const actionPattern = ACTION_VERBS[action];
+        const actionPattern = ACTION_VERBS[action as ActionVerb];
 
         if (!actionPattern) continue;
 
@@ -320,8 +317,12 @@ async function createExecutionPlan(task: string) {
         console.error('[MCP] Database error fetching prompts:', error);
         throw new Error(`Failed to retrieve prompts from vault: ${error.message}`);
     }
+    if (!userPrompts) {
+        console.warn('[MCP] No data returned from prompts query for user:', FAKE_USER_ID);
+        throw new Error('Could not retrieve prompts from your vault. The query returned no data.');
+    }
 
-    if (!userPrompts || userPrompts.length === 0) {
+    if (userPrompts.length === 0) {
         console.warn('[MCP] No prompts found in the user\'s vault.');
         throw new Error('Your prompt vault is empty. Please add prompts to use the MCP.');
     }
@@ -372,7 +373,13 @@ async function executePromptChain(prompts: Prompt[]) {
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     let context = "";
-    const trace: Array<{step: number, prompt: {id: number, title: string, content: string}, output: string}> = [];
+    const thinking: Array<{
+        promptId: string;
+        title: string;
+        status: string;
+        summary: string;
+        result: string;
+      }> = [];
 
     for (let i = 0; i < prompts.length; i++) {
         const prompt = prompts[i];
@@ -381,20 +388,18 @@ async function executePromptChain(prompts: Prompt[]) {
         const fullPrompt = `Context from previous step (if any):\n---\n${context}\n---\n\nYour task for this step:\n---\n${prompt.content}\n---`;
         const result = await model.generateContent(fullPrompt);
         context = result.response.text();
-        trace.push({
-            step: i + 1,
-            prompt: {
-                id: prompt.id,
-                title: prompt.title,
-                content: prompt.content
-            },
-            output: context
+        thinking.push({
+            promptId: prompt.id.toString(),
+            title: prompt.title,
+            status: 'Completed',
+            summary: `Executed prompt #${prompt.id}: ${prompt.title}`,
+            result: context,
         });
         console.log(`[MCP] Step ${i + 1} completed. Context updated.`);
     }
 
     console.log('[MCP] Autonomous execution finished.');
-    return { trace, finalAnswer: context };
+    return { thinking, finalAnswer: context };
 }
 
 
@@ -439,69 +444,141 @@ export async function POST(request: NextRequest) {
         } as MCPResponse);
 
       case 'tools/call':
-        const { name, arguments: args } = params;
+        if (!params || typeof params !== 'object' || !('name' in params) || !('arguments' in params)) {
+          return NextResponse.json({
+            jsonrpc: '2.0',
+            id,
+            error: { code: -32602, message: 'Invalid params: missing name or arguments' }
+          } as MCPResponse);
+        }
+        
+        const { name, arguments: args } = params as unknown as MCPToolCallParams;
         
         switch (name) {
-          case 'list_prompts':
+          case 'list_prompts': {
             const { data: prompts, error } = await supabase
               .from('prompts')
               .select('*')
               .order('created_at', { ascending: false });
             
-            if (error) throw error;
+            if (error) {
+              return NextResponse.json({
+                jsonrpc: '2.0',
+                id,
+                error: { code: -32000, message: `Database error listing prompts: ${error.message}` }
+              } as MCPResponse);
+            }
             
             return NextResponse.json({
               jsonrpc: '2.0',
               id,
-              result: { prompts }
+              result: { prompts: prompts || [] }
             } as MCPResponse);
+          }
 
-          case 'get_prompt':
+          case 'get_prompt': {
+            if (typeof args.id !== 'number') {
+              return NextResponse.json({
+                jsonrpc: '2.0',
+                id,
+                error: { code: -32602, message: 'Invalid arguments: id must be a number' }
+              } as MCPResponse);
+            }
+            
             const { data: prompt, error: promptError } = await supabase
               .from('prompts')
               .select('*')
               .eq('id', args.id)
               .single();
             
-            if (promptError) throw promptError;
+            if (promptError) {
+              return NextResponse.json({
+                jsonrpc: '2.0',
+                id,
+                error: { code: -32001, message: `Database error getting prompt: ${promptError.message}` }
+              } as MCPResponse);
+            }
             
             return NextResponse.json({
               jsonrpc: '2.0',
               id,
               result: { prompt }
             } as MCPResponse);
+          }
 
-          case 'search_prompts':
+          case 'search_prompts': {
+            if (typeof args.query !== 'string') {
+              return NextResponse.json({
+                jsonrpc: '2.0',
+                id,
+                error: { code: -32602, message: 'Invalid arguments: query must be a string' }
+              } as MCPResponse);
+            }
+            
+            const limit = typeof args.limit === 'number' ? args.limit : 10;
+            
             const { data: searchResults, error: searchError } = await supabase
               .from('prompts')
               .select('*')
               .or(`title.ilike.%${args.query}%,content.ilike.%${args.query}%`)
-              .limit(args.limit || 10)
+              .limit(limit)
               .order('created_at', { ascending: false });
             
-            if (searchError) throw searchError;
+            if (searchError) {
+              return NextResponse.json({
+                jsonrpc: '2.0',
+                id,
+                error: { code: -32002, message: `Database error searching prompts: ${searchError.message}` }
+              } as MCPResponse);
+            }
             
             return NextResponse.json({
               jsonrpc: '2.0',
               id,
-              result: { prompts: searchResults }
-            } as MCPResponse);
-
-          case 'create_execution_plan': {
-            const executionPlan = await createExecutionPlan(args.task);
-            return NextResponse.json({
-              jsonrpc: '2.0',
-              id,
-              result: executionPlan
+              result: { prompts: searchResults || [] }
             } as MCPResponse);
           }
 
+          case 'create_execution_plan': {
+            if (typeof args.task !== 'string') {
+              return NextResponse.json({
+                jsonrpc: '2.0',
+                id,
+                error: { code: -32602, message: 'Invalid arguments: task must be a string' }
+              } as MCPResponse);
+            }
+            
+            try {
+              const executionPlan = await createExecutionPlan(args.task);
+              return NextResponse.json({
+                jsonrpc: '2.0',
+                id,
+                result: executionPlan
+              } as MCPResponse);
+            } catch(e: unknown) {
+              const errorMessage = e instanceof Error ? e.message : 'Failed to create execution plan.';
+              return NextResponse.json({
+                jsonrpc: '2.0',
+                id,
+                error: { code: -32003, message: errorMessage }
+              } as MCPResponse);
+            }
+          }
+
           case 'execute_prompt_chain': {
-            const { trace, finalAnswer } = await executePromptChain(args.prompts);
+            if (!Array.isArray(args.prompts)) {
+              return NextResponse.json({
+                jsonrpc: '2.0',
+                id,
+                error: { code: -32602, message: 'Invalid arguments: prompts must be an array' }
+              } as MCPResponse);
+            }
+            
+            const { thinking, finalAnswer } = await executePromptChain(args.prompts as Prompt[]);
             return NextResponse.json({
               jsonrpc: '2.0',
               id,
-              result: { trace, finalAnswer }
+              result: { thinking, finalAnswer }
             } as MCPResponse);
           }
 
@@ -528,4 +605,4 @@ export async function POST(request: NextRequest) {
       error: { code: -32603, message: 'Internal error' }
     } as MCPResponse);
   }
-}
+} 
