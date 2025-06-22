@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowRight, Sparkles, Zap, Users, Shield } from 'lucide-react';
 
 export default function LandingPage() {
@@ -7,10 +8,17 @@ export default function LandingPage() {
       {/* Header */}
       <header className="px-4 lg:px-6 h-16 flex items-center w-full backdrop-blur-sm bg-white/70 border-b border-gray-200/50">
         <Link href="/" className="flex items-center justify-center group">
-          <div className="relative">
+          <div className="relative flex items-center">
             <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
               PromptPilot
             </span>
+            <Image 
+              src="/logo.png" 
+              alt="PromptPilot Logo" 
+              width={40} 
+              height={40} 
+              className="h-10 w-10"
+            />
             <Sparkles className="absolute -top-1 -right-4 h-4 w-4 text-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           </div>
         </Link>

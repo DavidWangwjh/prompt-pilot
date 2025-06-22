@@ -3,6 +3,7 @@
 import { useDashboard } from '@/context/DashboardContext';
 import { HomeIcon, MagnifyingGlassIcon, PlayIcon, Cog6ToothIcon } from "@heroicons/react/24/outline";
 import { clsx } from "clsx";
+import Image from 'next/image';
 
 const navigation = [
   { name: 'Vault' as const, icon: HomeIcon },
@@ -18,9 +19,18 @@ export default function Sidebar() {
     <div className="flex h-full w-64 flex-col bg-white border-r border-gray-200 shadow-sm">
       {/* Logo */}
       <div className="flex h-16 shrink-0 items-center px-6 border-b border-gray-200">
-        <h1 className="text-xl font-bold text-gray-900 hover:text-blue-600 transition-colors duration-200 cursor-pointer">
-          PromptPilot
-        </h1>
+        <div className="flex items-center">
+          <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent hover:from-blue-700 hover:to-purple-700 transition-all duration-200 cursor-pointer">
+            PromptPilot
+          </h1>
+          <Image 
+            src="/logo.png" 
+            alt="PromptPilot Logo" 
+            width={40} 
+            height={40} 
+            className="h-10 w-10 ml-2"
+          />
+        </div>
       </div>
 
       {/* Navigation */}
