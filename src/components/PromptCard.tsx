@@ -102,7 +102,7 @@ export default function PromptCard({ id, title, content, tags, likes, model, vie
             <p className="mt-1 text-sm text-gray-600 line-clamp-2">{content}</p>
           </div>
           <div className="hidden md:flex flex-wrap gap-2 mx-4" style={{ flexBasis: '250px' }}>
-            {tags.slice(0, 9).map((tag) => (
+            {tags.slice(0, 6).map((tag) => (
               <span key={tag} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full hover:bg-blue-200 transition-colors duration-200">
                 {tag}
               </span>
@@ -272,7 +272,7 @@ export default function PromptCard({ id, title, content, tags, likes, model, vie
             </p>
           </div>
           <div className="pt-4 flex flex-wrap gap-2">
-            {tags.slice(0, 9).map((tag) => (
+            {tags.slice(0, 6).map((tag) => (
               <span key={tag} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full hover:bg-blue-200 transition-colors duration-200">
                 {tag}
               </span>

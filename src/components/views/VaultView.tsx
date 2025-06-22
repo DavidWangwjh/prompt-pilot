@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { LayoutGrid, List, Plus, X, Loader2, Search } from 'lucide-react';
+import { LayoutGrid, List, Plus, X, Loader2, Search, Sparkles } from 'lucide-react';
 import PromptCard from '@/components/PromptCard';
 import { clsx } from 'clsx';
 import { useDashboard, Prompt } from '@/context/DashboardContext';
@@ -17,6 +17,7 @@ export default function VaultView() {
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [showNewPromptModal, setShowNewPromptModal] = useState(false);
   const [promptToEdit, setPromptToEdit] = useState<Prompt | null>(null);
+  const [optimizing, setOptimizing] = useState(false);
 
   useEffect(() => {
     const fetchPrompts = async () => {
@@ -179,7 +180,7 @@ export default function VaultView() {
 
   const addTag = () => {
     if (tagInput.trim() && !newPrompt.tags.includes(tagInput.trim())) {
-      if (newPrompt.tags.length >= 9) {
+      if (newPrompt.tags.length >= 6) {
         // Could add a toast notification here if desired
         return;
       }
@@ -205,60 +206,48 @@ export default function VaultView() {
     }
   };
 
-  const handleOptimize = () => {
-    if (!newPrompt.content.trim()) {
+  const handleOptimize = async () => {
+    if (!newPrompt.title.trim() && !newPrompt.content.trim()) {
       return;
     }
 
-    // Simple optimization logic - in a real app, this would call an AI API
-    const content = newPrompt.content.toLowerCase();
-    
-    // Generate tags based on content
-    const generatedTags: string[] = [];
-    
-    // Content type tags
-    if (content.includes('code') || content.includes('programming') || content.includes('javascript') || content.includes('python')) {
-      generatedTags.push('coding');
-    }
-    if (content.includes('write') || content.includes('story') || content.includes('article')) {
-      generatedTags.push('writing');
-    }
-    if (content.includes('image') || content.includes('art') || content.includes('design')) {
-      generatedTags.push('art');
-    }
-    if (content.includes('business') || content.includes('marketing') || content.includes('sales')) {
-      generatedTags.push('business');
-    }
-    if (content.includes('education') || content.includes('learn') || content.includes('teach')) {
-      generatedTags.push('education');
-    }
-    if (content.includes('creative') || content.includes('imagine') || content.includes('brainstorm')) {
-      generatedTags.push('creative');
-    }
-    if (content.includes('productivity') || content.includes('organize') || content.includes('plan')) {
-      generatedTags.push('productivity');
-    }
+    setOptimizing(true);
+    setError(null);
 
-    // Model-specific tags
-    if (newPrompt.model === 'DALL-E') {
-      generatedTags.push('image-generation');
+    try {
+      const response = await fetch('/api/optimize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: newPrompt.title,
+          content: newPrompt.content,
+          tags: newPrompt.tags,
+          model: newPrompt.model
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to optimize prompt');
+      }
+
+      const optimizedData = await response.json();
+      
+      setNewPrompt(prev => ({
+        ...prev,
+        title: optimizedData.title || prev.title,
+        content: optimizedData.content || prev.content,
+        tags: optimizedData.tags || prev.tags
+      }));
+
+    } catch (error) {
+      console.error('Error optimizing prompt:', error);
+      setError(error instanceof Error ? error.message : 'Failed to optimize prompt');
+    } finally {
+      setOptimizing(false);
     }
-    if (newPrompt.model === 'GPT-4' || newPrompt.model === 'Claude') {
-      generatedTags.push('text-generation');
-    }
-
-    // Remove duplicates and limit to 5 tags
-    const uniqueTags = [...new Set(generatedTags)].slice(0, 5);
-
-    // Ensure we don't exceed 9 tags total
-    const currentTags = newPrompt.tags;
-    const availableSlots = 9 - currentTags.length;
-    const tagsToAdd = uniqueTags.slice(0, availableSlots);
-
-    setNewPrompt(prev => ({
-      ...prev,
-      tags: [...prev.tags, ...tagsToAdd]
-    }));
   };
 
   if (loading) {
@@ -408,7 +397,7 @@ export default function VaultView() {
               {/* Tags */}
               <div>
                 <label htmlFor="tags" className="block text-sm font-medium text-gray-700 mb-2">
-                  Tags {newPrompt.tags.length >= 9 && <span className="text-red-500">(Maximum 9 tags reached)</span>}
+                  Tags {newPrompt.tags.length >= 6 && <span className="text-red-500">(Maximum 6 tags reached)</span>}
                 </label>
                 <div className="flex flex-wrap gap-2 mb-2">
                   {newPrompt.tags.map(tag => (
@@ -432,13 +421,13 @@ export default function VaultView() {
                     value={tagInput}
                     onChange={(e) => setTagInput(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    disabled={newPrompt.tags.length >= 9}
+                    disabled={newPrompt.tags.length >= 6}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                    placeholder={newPrompt.tags.length >= 9 ? "Maximum tags reached" : "Add a tag..."}
+                    placeholder={newPrompt.tags.length >= 6 ? "Maximum tags reached" : "Add a tag..."}
                   />
                   <button
                     onClick={addTag}
-                    disabled={newPrompt.tags.length >= 9 || !tagInput.trim()}
+                    disabled={newPrompt.tags.length >= 6 || !tagInput.trim()}
                     className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors duration-200 disabled:bg-gray-300 disabled:cursor-not-allowed"
                   >
                     Add
@@ -474,6 +463,11 @@ export default function VaultView() {
                 )}
               </div>
               <div className="flex items-center gap-3">
+                {error && (
+                  <div className="text-red-600 text-sm max-w-xs">
+                    {error}
+                  </div>
+                )}
                 <button
                   onClick={() => setShowNewPromptModal(false)}
                   className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors duration-200"
@@ -482,10 +476,20 @@ export default function VaultView() {
                 </button>
                 <button
                   onClick={handleOptimize}
-                  disabled={!newPrompt.content.trim()}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200"
+                  disabled={!newPrompt.title.trim() && !newPrompt.content.trim() || optimizing}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-200 flex items-center gap-2"
                 >
-                  Optimize
+                  {optimizing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Optimizing...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" />
+                      Optimize
+                    </>
+                  )}
                 </button>
                 <button
                   onClick={handleSavePrompt}
