@@ -91,7 +91,17 @@ export default function LandingPage() {
                 </div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">Smart Optimization</h3>
                 <p className="text-gray-600">
-                  AI-powered prompt optimization with A/B testing playground to improve your prompts.
+                  AI-powered suggestions to improve your prompts and get better results.
+                </p>
+              </div>
+
+              <div className="text-center p-6 rounded-2xl bg-white/70 backdrop-blur-sm border border-gray-200/50 hover:shadow-lg transition-all duration-300 hover:scale-105">
+                <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Users className="h-6 w-6 text-purple-600" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">Community Driven</h3>
+                <p className="text-gray-600">
+                  Share and discover prompts from a growing community of AI enthusiasts.
                 </p>
               </div>
 
@@ -102,16 +112,6 @@ export default function LandingPage() {
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">MCP Integration</h3>
                 <p className="text-gray-600">
                   Seamlessly connect with AI tools through Model Context Protocol for enhanced functionality.
-                </p>
-              </div>
-
-              <div className="text-center p-6 rounded-2xl bg-white/70 backdrop-blur-sm border border-gray-200/50 hover:shadow-lg transition-all duration-300 hover:scale-105">
-                <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Users className="h-6 w-6 text-purple-600" />
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Community Driven</h3>
-                <p className="text-gray-600">
-                  Share and explore prompts from a growing community of AI enthusiasts and experts.
                 </p>
               </div>
             </div>
