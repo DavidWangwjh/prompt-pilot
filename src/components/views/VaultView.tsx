@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { LayoutGrid, List, Plus, X, Loader2 } from 'lucide-react';
+import { LayoutGrid, List, Plus, X, Loader2, Search } from 'lucide-react';
 import PromptCard from '@/components/PromptCard';
 import { clsx } from 'clsx';
 import { useDashboard, Prompt } from '@/context/DashboardContext';
@@ -290,15 +290,27 @@ export default function VaultView() {
       </div>
       
       <div className={clsx('transition-all duration-300', view === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6' : 'flex flex-col gap-4')}>
-        {filteredPrompts.map((prompt) => (
-          <PromptCard 
-            key={prompt.id}
-            {...prompt}
-            source="vault"
-            onEdit={() => openForEdit(prompt)}
-            view={view}
-          />
-        ))}
+        {filteredPrompts.length > 0 ? (
+          filteredPrompts.map((prompt) => (
+            <PromptCard 
+              key={prompt.id}
+              {...prompt}
+              source="vault"
+              onEdit={() => openForEdit(prompt)}
+              view={view}
+            />
+          ))
+        ) : (
+          <div className="col-span-full flex flex-col items-center justify-center py-12 text-center">
+            <div className="text-gray-400 mb-4">
+              <Search size={48} />
+            </div>
+            <p className="text-gray-500 text-lg font-medium">No prompts found</p>
+            <p className="text-gray-400 text-sm mt-1">
+              {globalSearchTerm.trim() ? "Try adjusting your search terms" : "Create your first prompt to get started"}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Floating Action Button */}
