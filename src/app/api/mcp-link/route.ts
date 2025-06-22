@@ -101,7 +101,7 @@ const tools = [
   },
   {
     name: 'execute_prompt_chain',
-    description: 'Execute a chain of prompts in seGiven a natural language task from the user, automatically find the best prompts and execute them in sequence to complete the task. Use this when the user gives a multi-step task.quence',
+    description: 'Execute a chain of prompts in sequence',
     inputSchema: {
       type: 'object',
       properties: {
@@ -162,85 +162,85 @@ async function analyzeTask(task: string) {
 
 
 // --- Prompt Retrieval Logic ---
-function calculateRelevance(prompt: Prompt, actionPattern: RegExp, keywords: string[]): number {
-    let score = 0;
-    const title = prompt.title.toLowerCase();
-    const content = prompt.content.toLowerCase();
+// function calculateRelevance(prompt: Prompt, actionPattern: RegExp, keywords: string[]): number {
+//     let score = 0;
+//     const title = prompt.title.toLowerCase();
+//     const content = prompt.content.toLowerCase();
 
-    // Strong match for the action verb in the title
-    if (actionPattern.test(title)) {
-        score += 5;
-    }
-    // Weaker match in content
-    if (actionPattern.test(content)) {
-        score += 2;
-    }
+//     // Strong match for the action verb in the title
+//     if (actionPattern.test(title)) {
+//         score += 5;
+//     }
+//     // Weaker match in content
+//     if (actionPattern.test(content)) {
+//         score += 2;
+//     }
 
-    // Bonus for keywords
-    keywords.forEach(kw => {
-        if (title.includes(kw)) {
-            score += 3;
-        }
-        if (content.includes(kw)) {
-            score += 1;
-        }
-    });
+//     // Bonus for keywords
+//     keywords.forEach(kw => {
+//         if (title.includes(kw)) {
+//             score += 3;
+//         }
+//         if (content.includes(kw)) {
+//             score += 1;
+//         }
+//     });
 
-    return score;
-}
+//     return score;
+// }
 
-async function findSuitablePrompts(analysis: { actions: string[]; keywords: string[] }, userPrompts: Prompt[]) {
-    console.log(`[MCP] Finding prompts for actions: ${analysis.actions.join(', ')}`);
-    const finalPrompts: Prompt[] = [];
-    const usedPromptIds = new Set<number>();
+// async function findSuitablePrompts(analysis: { actions: string[]; keywords: string[] }, userPrompts: Prompt[]) {
+//     console.log(`[MCP] Finding prompts for actions: ${analysis.actions.join(', ')}`);
+//     const finalPrompts: Prompt[] = [];
+//     const usedPromptIds = new Set<number>();
 
-    for (const action of analysis.actions) {
-        let bestPrompt: Prompt | null = null;
-        let highestScore = 0;
-        const actionPattern = ACTION_VERBS[action as ActionVerb];
+//     for (const action of analysis.actions) {
+//         let bestPrompt: Prompt | null = null;
+//         let highestScore = 0;
+//         const actionPattern = ACTION_VERBS[action as ActionVerb];
 
-        if (!actionPattern) continue;
+//         if (!actionPattern) continue;
 
-        for (const prompt of userPrompts) {
-            if (usedPromptIds.has(prompt.id)) continue;
-            const score = calculateRelevance(prompt, actionPattern, analysis.keywords);
-            if (score > highestScore) {
-                highestScore = score;
-                bestPrompt = prompt;
-            }
-        }
+//         for (const prompt of userPrompts) {
+//             if (usedPromptIds.has(prompt.id)) continue;
+//             const score = calculateRelevance(prompt, actionPattern, analysis.keywords);
+//             if (score > highestScore) {
+//                 highestScore = score;
+//                 bestPrompt = prompt;
+//             }
+//         }
 
-        if (bestPrompt && highestScore > 0) {
-            finalPrompts.push(bestPrompt);
-            usedPromptIds.add(bestPrompt.id);
-        }
-    }
+//         if (bestPrompt && highestScore > 0) {
+//             finalPrompts.push(bestPrompt);
+//             usedPromptIds.add(bestPrompt.id);
+//         }
+//     }
 
-    // If the user asked for a summary and no summary prompt was found, try to find a generic summary prompt
-    if (
-        analysis.actions.includes('summarize') &&
-        !finalPrompts.some(p => /summary|summarize|condense|recap/i.test(p.title + p.content))
-    ) {
-        let bestSummaryPrompt: Prompt | null = null;
-        let bestScore = 0;
-        for (const prompt of userPrompts) {
-            if (usedPromptIds.has(prompt.id)) continue;
-            if (/summary|summarize|condense|recap/i.test(prompt.title + prompt.content)) {
-                const score = calculateRelevance(prompt, /summary|summarize|condense|recap/i, analysis.keywords);
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestSummaryPrompt = prompt;
-                }
-            }
-        }
-        if (bestSummaryPrompt) {
-            finalPrompts.push(bestSummaryPrompt);
-            usedPromptIds.add(bestSummaryPrompt.id);
-        }
-    }
+//     // If the user asked for a summary and no summary prompt was found, try to find a generic summary prompt
+//     if (
+//         analysis.actions.includes('summarize') &&
+//         !finalPrompts.some(p => /summary|summarize|condense|recap/i.test(p.title + p.content))
+//     ) {
+//         let bestSummaryPrompt: Prompt | null = null;
+//         let bestScore = 0;
+//         for (const prompt of userPrompts) {
+//             if (usedPromptIds.has(prompt.id)) continue;
+//             if (/summary|summarize|condense|recap/i.test(prompt.title + prompt.content)) {
+//                 const score = calculateRelevance(prompt, /summary|summarize|condense|recap/i, analysis.keywords);
+//                 if (score > bestScore) {
+//                     bestScore = score;
+//                     bestSummaryPrompt = prompt;
+//                 }
+//             }
+//         }
+//         if (bestSummaryPrompt) {
+//             finalPrompts.push(bestSummaryPrompt);
+//             usedPromptIds.add(bestSummaryPrompt.id);
+//         }
+//     }
 
-    return finalPrompts;
-}
+//     return finalPrompts;
+// }
 
 
 // --- NEW: LLM-Powered Reranking ---
@@ -330,11 +330,13 @@ async function createExecutionPlan(task: string) {
     console.log(`[MCP] Successfully retrieved ${userPrompts.length} prompts from vault.`);
 
     // 1. Get initial candidates using the keyword/action method
-    const candidatePrompts = await findSuitablePrompts(analysis, userPrompts);
+    // let candidatePrompts = await findSuitablePrompts(analysis, userPrompts);
+    let candidatePrompts = userPrompts;
 
     if (candidatePrompts.length === 0) {
-        console.warn('[MCP] Could not find any suitable prompts for the task.');
-        throw new Error('Could not find any suitable prompts in your vault for this task. Try adding more relevant prompts.');
+        // console.warn('[MCP] Could not find any suitable prompts for the task.');
+        // throw new Error('Could not find any suitable prompts in your vault for this task. Try adding more relevant prompts.');
+        candidatePrompts = userPrompts
     }
 
     // 2. Use the LLM to rerank and validate the candidates
@@ -355,20 +357,22 @@ async function createExecutionPlan(task: string) {
 
 
 // --- Tool 2: Execute Prompt Chain ---
-async function executePromptChain(prompts: Prompt[]) {
+async function executePromptChain(prompts: Prompt[], controller: ReadableStreamDefaultController) {
+    const encoder = new TextEncoder();
+    const sendEvent = (data: object) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+    };
+
     console.log(`[MCP] Starting autonomous execution of ${prompts.length} prompts.`);
+    sendEvent({ type: 'log', message: `Starting autonomous execution of ${prompts.length} prompts.` });
+
     const API_KEY = process.env.GEMINI_API_KEY;
     if (!API_KEY) {
-        console.warn('[MCP] GEMINI_API_KEY not set, returning execution plan without execution.');
-        return {
-            message: "API key not configured. Here's your execution plan:",
-            prompts: prompts.map((prompt, index) => ({
-                step: index + 1,
-                title: prompt.title,
-                content: prompt.content
-            }))
-        };
+        console.warn('[MCP] GEMINI_API_KEY not set');
+        sendEvent({ type: 'error', message: 'GEMINI_API_KEY not configured on the server.' });
+        return;
     }
+
     const genAI = new GoogleGenerativeAI(API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
@@ -379,27 +383,32 @@ async function executePromptChain(prompts: Prompt[]) {
         status: string;
         summary: string;
         result: string;
-      }> = [];
+    }> = [];
 
     for (let i = 0; i < prompts.length; i++) {
         const prompt = prompts[i];
         console.log(`[MCP] Executing Step ${i + 1}: ${prompt.title}`);
+        sendEvent({ type: 'progress', step: i + 1, total: prompts.length, title: prompt.title });
 
         const fullPrompt = `Context from previous step (if any):\n---\n${context}\n---\n\nYour task for this step:\n---\n${prompt.content}\n---`;
         const result = await model.generateContent(fullPrompt);
         context = result.response.text();
-        thinking.push({
+
+        const stepResult = {
             promptId: prompt.id.toString(),
             title: prompt.title,
             status: 'Completed',
             summary: `Executed prompt #${prompt.id}: ${prompt.title}`,
             result: context,
-        });
+        };
+        thinking.push(stepResult);
+        sendEvent({ type: 'thinking', data: stepResult });
         console.log(`[MCP] Step ${i + 1} completed. Context updated.`);
     }
 
     console.log('[MCP] Autonomous execution finished.');
-    return { thinking, finalAnswer: context };
+    const finalResult = { thinking, finalAnswer: context };
+    sendEvent({ type: 'result', data: finalResult });
 }
 
 
@@ -555,31 +564,32 @@ export async function POST(request: NextRequest) {
                 id,
                 result: executionPlan
               } as MCPResponse);
-            } catch(e: unknown) {
-              const errorMessage = e instanceof Error ? e.message : 'Failed to create execution plan.';
+            } catch (e) {
+              const message = e instanceof Error ? e.message : 'An unknown error occurred';
+              console.error('[MCP] Error creating execution plan:', message);
               return NextResponse.json({
                 jsonrpc: '2.0',
                 id,
-                error: { code: -32003, message: errorMessage }
+                error: { code: -32003, message: `Error creating execution plan: ${message}` }
               } as MCPResponse);
             }
           }
 
           case 'execute_prompt_chain': {
-            if (!Array.isArray(args.prompts)) {
-              return NextResponse.json({
-                jsonrpc: '2.0',
-                id,
-                error: { code: -32602, message: 'Invalid arguments: prompts must be an array' }
-              } as MCPResponse);
-            }
-            
-            const { thinking, finalAnswer } = await executePromptChain(args.prompts as Prompt[]);
-            return NextResponse.json({
-              jsonrpc: '2.0',
-              id,
-              result: { thinking, finalAnswer }
-            } as MCPResponse);
+            const stream = new ReadableStream({
+              async start(controller) {
+                const prompts = args.prompts as Prompt[];
+                await executePromptChain(prompts, controller);
+                controller.close();
+              },
+            });
+            return new Response(stream, {
+              headers: {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+              },
+            });
           }
 
           default:

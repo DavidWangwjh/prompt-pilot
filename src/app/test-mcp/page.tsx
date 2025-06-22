@@ -115,11 +115,41 @@ export default function McpTestPage() {
           params: { name: 'execute_prompt_chain', arguments: { prompts: planData.result.prompts } }
         }),
       });
-      const execData = await execResponse.json();
-      if (execData.error) throw new Error(execData.error.message);
 
-      setFinalAnswer(execData.result.finalAnswer);
-      setStatus('done');
+      if (!execResponse.ok) {
+        throw new Error(`HTTP error! status: ${execResponse.status}`);
+      }
+
+      const reader = execResponse.body?.getReader();
+      if (!reader) {
+        throw new Error('Failed to get response reader');
+      }
+
+      const decoder = new TextDecoder();
+      let done = false;
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        const chunk = decoder.decode(value, { stream: true });
+        
+        // Process server-sent events
+        const events = chunk.split('\n\n');
+        for (const event of events) {
+          if (event.startsWith('data:')) {
+            const dataStr = event.substring(5);
+            try {
+              const data = JSON.parse(dataStr);
+              if (data.type === 'result') {
+                setFinalAnswer(data.data.finalAnswer);
+                setStatus('done');
+              }
+              // You can add more event handlers here (e.g., for 'progress' or 'log')
+            } catch (e) {
+              console.error('Failed to parse stream data chunk', e);
+            }
+          }
+        }
+      }
 
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An unknown error occurred.';
