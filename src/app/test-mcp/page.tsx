@@ -14,19 +14,47 @@ interface Prompt {
 interface ExecutionPlan {
   task: string;
   analysis: {
-    primaryType: string;
+    actions: string[];
     keywords: string[];
   };
   prompts: Prompt[];
 }
 
+interface McpResult {
+  finalAnswer: string;
+  executionPlan: ExecutionPlan;
+}
+
 // --- Components ---
-const ExecutionPlanDisplay = ({ plan }: { plan: ExecutionPlan }) => {
+const ExecutionPlanDisplay = ({ plan, finalAnswer, status }: { plan: ExecutionPlan, finalAnswer: string | null, status: 'executing' | 'done' }) => {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      {/* Final Answer */}
+      {finalAnswer && status === 'done' && (
+        <div className="bg-green-50 p-6 rounded-lg border-2 border-green-200 shadow-lg">
+          <h2 className="text-xl font-bold text-green-900 mb-3">Final Result</h2>
+          <div className="bg-white p-4 rounded-md text-gray-800 whitespace-pre-wrap">{finalAnswer}</div>
+        </div>
+      )}
+      
+      {/* Status Indicator */}
+      {status === 'executing' && (
+          <div className="flex items-center justify-center gap-3 text-blue-600 py-4">
+            <Loader2 className="animate-spin" size={24} />
+            <span className="text-lg">Executing prompts...</span>
+          </div>
+      )}
+
+      {/* Execution Details */}
       <div>
-        <h2 className="text-xl font-bold text-gray-800">Execution Plan for: <span className="text-blue-600">{plan.task}</span></h2>
-        <p className="text-sm text-gray-500">Task Type: <span className="font-medium capitalize">{plan.analysis.primaryType}</span>, Keywords: <span className="font-medium">{plan.analysis.keywords.join(', ')}</span></p>
+        <h3 className="text-lg font-semibold text-gray-700">Execution Details</h3>
+        <div className="mt-2 bg-gray-50 p-4 rounded-lg border">
+            <p className="text-sm text-gray-600">
+              <strong>Task:</strong> {plan.task} <br />
+              <strong>Detected Actions:</strong> <span className="font-medium capitalize text-purple-600">{plan.analysis.actions.join(', ')}</span> | 
+              <strong>Keywords:</strong> <span className="font-medium text-purple-600">{plan.analysis.keywords.join(', ')}</span>
+            </p>
+        </div>
       </div>
 
       <div className="space-y-4">
@@ -50,48 +78,63 @@ const ExecutionPlanDisplay = ({ plan }: { plan: ExecutionPlan }) => {
 
 // --- Main Page ---
 export default function McpTestPage() {
-  const [task, setTask] = useState('research AI safety');
+  const [task, setTask] = useState('deep research AI safety, and make summary');
   const [executionPlan, setExecutionPlan] = useState<ExecutionPlan | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [finalAnswer, setFinalAnswer] = useState<string | null>(null);
+  const [status, setStatus] = useState<'idle' | 'planning' | 'executing' | 'done' | 'error'>('idle');
   const [error, setError] = useState<string | null>(null);
 
-  const executeTask = async (taskQuery: string) => {
-    setLoading(true);
+  const runTask = async (taskQuery: string) => {
+    // 1. Reset states and start planning
+    setStatus('planning');
     setError(null);
     setExecutionPlan(null);
+    setFinalAnswer(null);
 
     try {
-      const body = {
-        jsonrpc: '2.0',
-        id: Date.now(), // Use a unique ID for each request
-        method: 'tools/call',
-        params: {
-          name: 'run_prompt_workflow',
-          arguments: { task: taskQuery }
-        }
-      };
-      
-      const response = await fetch('/api/mcp-link', {
+      // 2. Create the execution plan
+      const planResponse = await fetch('/api/mcp-link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: Date.now(),
+          method: 'tools/call',
+          params: { name: 'create_execution_plan', arguments: { task: taskQuery } }
+        }),
       });
-
-      const data = await response.json();
+      const planData = await planResponse.json();
+      if (planData.error) throw new Error(planData.error.message);
       
-      if (data.error) {
-        throw new Error(data.error.message || 'An unknown API error occurred');
-      }
+      setExecutionPlan(planData.result);
 
-      setExecutionPlan(data.result);
+      // 3. Execute the plan
+      setStatus('executing');
+      const execResponse = await fetch('/api/mcp-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: Date.now(),
+          method: 'tools/call',
+          params: { name: 'execute_prompt_chain', arguments: { prompts: planData.result.prompts } }
+        }),
+      });
+      const execData = await execResponse.json();
+      if (execData.error) throw new Error(execData.error.message);
+
+      setFinalAnswer(execData.result.finalAnswer);
+      setStatus('done');
+
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An unknown error occurred.';
       console.error("MCP Execution Error:", message);
       setError(message);
-    } finally {
-      setLoading(false);
+      setStatus('error');
     }
   };
+
+  const isLoading = status === 'planning' || status === 'executing';
 
   return (
     <div className="container mx-auto p-4 sm:p-6 md:p-8 max-w-4xl">
@@ -107,29 +150,29 @@ export default function McpTestPage() {
             type="text"
             value={task}
             onChange={(e) => setTask(e.target.value)}
-            placeholder="Enter a task (e.g., 'research AI safety')"
+            placeholder="Enter a task (e.g., 'deep research AI safety, and make summary')"
             className="border border-gray-300 rounded-md p-3 flex-grow focus:ring-2 focus:ring-blue-500"
           />
           <button
-            onClick={() => executeTask(task)}
-            disabled={loading || !task.trim()}
+            onClick={() => runTask(task)}
+            disabled={isLoading || !task.trim()}
             className="bg-blue-600 text-white px-6 py-3 rounded-md disabled:bg-gray-400 hover:bg-blue-700 transition-all inline-flex items-center justify-center gap-2 font-medium"
           >
-            {loading ? <Loader2 className="animate-spin" size={20} /> : <Send size={16} />}
-            {loading ? 'Retrieving...' : 'Run Task'}
+            {isLoading ? <Loader2 className="animate-spin" size={20} /> : <Send size={16} />}
+            {status === 'planning' ? 'Planning...' : status === 'executing' ? 'Executing...' : 'Run Task'}
           </button>
         </div>
       </div>
       
       <div className="mt-8">
-        {loading && (
+        {status === 'planning' && (
           <div className="flex items-center justify-center gap-3 text-gray-600 py-12">
             <Loader2 className="animate-spin" size={24} />
-            <span className="text-lg">Analyzing task and retrieving prompts from your vault...</span>
+            <span className="text-lg">Analyzing task and creating execution plan...</span>
           </div>
         )}
 
-        {error && (
+        {status === 'error' && error && (
           <div className="bg-red-50 border-l-4 border-red-400 text-red-700 p-4 rounded-md" role="alert">
             <div className="flex items-center">
                 <AlertTriangle className="h-6 w-6 mr-3"/>
@@ -143,7 +186,7 @@ export default function McpTestPage() {
 
         {executionPlan && (
           <div className="bg-gray-50/50 rounded-lg p-6 border border-gray-200">
-            <ExecutionPlanDisplay plan={executionPlan} />
+            <ExecutionPlanDisplay plan={executionPlan} finalAnswer={finalAnswer} status={status as 'executing' | 'done'} />
           </div>
         )}
       </div>
