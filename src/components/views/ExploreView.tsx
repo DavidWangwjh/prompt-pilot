@@ -31,14 +31,10 @@ export default function ExploreView() {
                 console.error('Error fetching prompts:', error);
                 setError('Failed to load prompts. Please try again later.');
             } else {
-                const fetchedPrompts: Prompt[] = (data || []).map((p: any) => ({
-                    id: p.id,
-                    title: p.title,
-                    content: p.content,
-                    tags: p.tags,
-                    model: p.model,
-                    comments: p.comments || 0,
+                const fetchedPrompts: Prompt[] = (data || []).map(p => ({
+                    ...p,
                     likes: p.likes || 0,
+                    is_public: p.is_public ?? true,
                 }));
                 setPrompts(fetchedPrompts);
             }

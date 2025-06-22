@@ -39,7 +39,7 @@ export default function VaultView() {
           console.error('Error fetching vault prompts:', error);
           setError('Failed to load your prompts. Please try again later.');
       } else {
-          const fetchedPrompts: Prompt[] = (data || []).map((p: any) => ({
+          const fetchedPrompts: Prompt[] = (data || []).map(p => ({
               ...p,
               likes: p.likes || 0,
               is_public: p.is_public || false,
@@ -284,6 +284,7 @@ export default function VaultView() {
             <PromptCard 
               key={prompt.id}
               {...prompt}
+              is_public={prompt.is_public || false}
               source="vault"
               onEdit={() => openForEdit(prompt)}
               view={view}
