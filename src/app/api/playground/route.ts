@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
+import { aiJudgeAgent } from '@/lib/ai-judge-agent';
 
 const MODEL_NAME = "gemini-2.0-flash";
 const API_KEY = process.env.GEMINI_API_KEY || "";
@@ -36,85 +37,34 @@ async function runGenerate(prompt: string) {
     return result.response.text();
 }
 
-async function runJudgeAndScore(promptA: string, promptB: string, responseA: string, responseB: string) {
-     if (!API_KEY) {
-        throw new Error('GEMINI_API_KEY is not set');
-    }
-    const genAI = new GoogleGenerativeAI(API_KEY);
-    const model = genAI.getGenerativeModel({ model: MODEL_NAME });
-
-    const judgePrompt = `
-You are an expert prompt engineering assistant. Your task is to analyze two prompts and their generated responses.
-
-PROMPT A:
----
-${promptA}
----
-
-RESPONSE A:
----
-${responseA}
----
-
-PROMPT B:
----
-${promptB}
----
-
-RESPONSE B:
----
-${responseB}
----
-
-Please provide a detailed analysis and a recommendation based on the quality of the responses. Also, provide scores for Clarity, Engagement, and Creativity for each prompt's response on a scale of 0-100.
-
-IMPORTANT: Return your response as a single, valid JSON object only. Do not include any other text, markdown, or explanations. The JSON object must follow this exact structure:
-{
-  "feedback": "Your detailed analysis and recommendation here...",
-  "scores": {
-    "promptA": { "clarity": <score>, "engagement": <score>, "creativity": <score> },
-    "promptB": { "clarity": <score>, "engagement": <score>, "creativity": <score> }
-  }
-}
-`;
-    const result = await model.generateContent(judgePrompt);
-    const text = result.response.text();
-
-    try {
-        // Find the start and end of the JSON object
-        const startIndex = text.indexOf('{');
-        const endIndex = text.lastIndexOf('}') + 1;
-        const jsonString = text.substring(startIndex, endIndex);
-        return JSON.parse(jsonString);
-    } catch (error) {
-        console.error("Failed to parse JSON from Gemini response:", text, error);
-        throw new Error("The AI judge returned an invalid response. Please try again.");
-    }
-}
-
-
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { action, promptA, promptB, model } = body;
 
     if (action === 'generate_and_judge') {
-        if (!promptA || !promptB || !model) {
-            return NextResponse.json({ error: 'Missing parameters for generate action' }, { status: 400 });
+        if (!promptA || !promptB) {
+            return NextResponse.json({ error: 'Missing prompt parameters' }, { status: 400 });
         }
         
+        // Generate responses from both prompts using Gemini
         const [generatedA, generatedB] = await Promise.all([
             runGenerate(promptA),
             runGenerate(promptB)
         ]);
         
-        const { feedback, scores } = await runJudgeAndScore(promptA, promptB, generatedA, generatedB);
+        // Use AI Judge Agent to analyze the prompts and responses
+        const judgeResult = await aiJudgeAgent.analyzePrompts(promptA, promptB, generatedA, generatedB);
 
         return NextResponse.json({ 
             responseA: generatedA, 
             responseB: generatedB,
-            feedback,
-            scores,
+            feedback: judgeResult.feedback,
+            scores: judgeResult.scores,
+            winner: judgeResult.winner,
+            reasoning: judgeResult.reasoning,
+            recommendations: judgeResult.recommendations,
+            overallAssessment: judgeResult.overallAssessment
         });
     }
 

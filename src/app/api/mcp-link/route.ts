@@ -159,7 +159,8 @@ async function rerankAndVerifyWithLLM(task: string, candidatePrompts: Prompt[]) 
     console.log('[MCP] Using LLM to rerank and verify candidate prompts.');
     const API_KEY = process.env.GEMINI_API_KEY;
     if (!API_KEY) {
-        throw new Error('GEMINI_API_KEY is not set for the reranker.');
+        console.warn('[MCP] GEMINI_API_KEY not set, falling back to keyword-based ranking.');
+        return candidatePrompts;
     }
     const genAI = new GoogleGenerativeAI(API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -265,7 +266,15 @@ async function executePromptChain(prompts: Prompt[]) {
     console.log(`[MCP] Starting autonomous execution of ${prompts.length} prompts.`);
     const API_KEY = process.env.GEMINI_API_KEY;
     if (!API_KEY) {
-        throw new Error('GEMINI_API_KEY is not set in environment variables.');
+        console.warn('[MCP] GEMINI_API_KEY not set, returning execution plan without execution.');
+        return {
+            message: "API key not configured. Here's your execution plan:",
+            prompts: prompts.map((prompt, index) => ({
+                step: index + 1,
+                title: prompt.title,
+                content: prompt.content
+            }))
+        };
     }
     const genAI = new GoogleGenerativeAI(API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -288,6 +297,24 @@ async function executePromptChain(prompts: Prompt[]) {
 
 
 // --- API Route Handler ---
+export async function GET() {
+    // Handle GET requests for MCP server discovery
+    return NextResponse.json({
+        jsonrpc: '2.0',
+        id: null,
+        result: {
+            protocolVersion: '2024-11-05',
+            serverInfo: {
+                name: 'PromptPilot MCP',
+                version: '1.0.0'
+            },
+            capabilities: {
+                tools: {}
+            }
+        }
+    });
+}
+
 export async function POST(request: Request) {
     const body = await request.json();
     const { method, params, id } = body;
